@@ -263,6 +263,12 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   }
 
   Widget _buildNavigationButtons(BuildContext context, bool isLastWorkout) {
+    // Get next exercise name if available
+    String? nextExerciseName;
+    if (!isLastWorkout && currentWorkoutIndex < mockWorkouts.length - 1) {
+      nextExerciseName = mockWorkouts[currentWorkoutIndex + 1]['name'] as String;
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -277,46 +283,22 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
       ),
       child: SafeArea(
         top: false,
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            if (currentWorkoutIndex > 0)
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () {
-                    setState(() {
-                      currentWorkoutIndex--;
-                      // Reset to first uncompleted set for previous workout
-                      final workout = mockWorkouts[currentWorkoutIndex];
-                      final sets = workout['sets'] as List;
-                      currentSetIndex = sets.indexWhere((set) => set['completed'] == false);
-                      if (currentSetIndex == -1) {
-                        currentSetIndex = 0;
-                      }
-                      // Cancel any running timer
-                      _timer?.cancel();
-                      isTimerRunning = false;
-                      timerSeconds = null;
-                    });
-                  },
-                  child: const Text('Previous'),
-                ),
-              ),
-            if (currentWorkoutIndex > 0) const SizedBox(width: 12),
-            Expanded(
-              flex: currentWorkoutIndex > 0 ? 1 : 1,
-              child: FilledButton(
-                onPressed: isLastWorkout
-                    ? () {
-                        // TODO: Navigate back or show completion screen
-                        Navigator.of(context).pop();
-                      }
-                    : () {
+            Row(
+              children: [
+                if (currentWorkoutIndex > 0)
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
                         setState(() {
-                          currentWorkoutIndex++;
-                          // Reset to first uncompleted set for next workout
+                          currentWorkoutIndex--;
+                          // Reset to first uncompleted set for previous workout
                           final workout = mockWorkouts[currentWorkoutIndex];
                           final sets = workout['sets'] as List;
-                          currentSetIndex = sets.indexWhere((set) => set['completed'] == false);
+                          currentSetIndex =
+                              sets.indexWhere((set) => set['completed'] == false);
                           if (currentSetIndex == -1) {
                             currentSetIndex = 0;
                           }
@@ -326,9 +308,52 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                           timerSeconds = null;
                         });
                       },
-                child: Text(isLastWorkout ? 'Finish' : 'Next'),
-              ),
+                      child: const Text('Previous'),
+                    ),
+                  ),
+                if (currentWorkoutIndex > 0) const SizedBox(width: 12),
+                Expanded(
+                  flex: currentWorkoutIndex > 0 ? 1 : 1,
+                  child: FilledButton(
+                    onPressed: isLastWorkout
+                        ? () {
+                            // TODO: Navigate back or show completion screen
+                            Navigator.of(context).pop();
+                          }
+                        : () {
+                            setState(() {
+                              currentWorkoutIndex++;
+                              // Reset to first uncompleted set for next workout
+                              final workout = mockWorkouts[currentWorkoutIndex];
+                              final sets = workout['sets'] as List;
+                              currentSetIndex = sets
+                                  .indexWhere((set) => set['completed'] == false);
+                              if (currentSetIndex == -1) {
+                                currentSetIndex = 0;
+                              }
+                              // Cancel any running timer
+                              _timer?.cancel();
+                              isTimerRunning = false;
+                              timerSeconds = null;
+                            });
+                          },
+                    child: Text(isLastWorkout ? 'Finish' : 'Next'),
+                  ),
+                ),
+              ],
             ),
+            if (nextExerciseName != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Next: $nextExerciseName',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withOpacity(0.6),
+                    ),
+              ),
+            ],
           ],
         ),
       ),
