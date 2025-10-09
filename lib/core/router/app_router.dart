@@ -47,11 +47,13 @@ final appRouter = GoRouter(
         final weekId = state.pathParameters['weekId']!;
         final dayId = state.pathParameters['dayId']!;
         final dayName = state.uri.queryParameters['dayName'] ?? 'Day';
+        final weekNumber = state.uri.queryParameters['weekNumber'] ?? '1';
         return WorkoutListScreen(
           planId: planId,
           weekId: weekId,
           dayId: dayId,
           dayName: dayName,
+          weekNumber: int.tryParse(weekNumber) ?? 1,
         );
       },
     ),

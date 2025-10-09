@@ -7,6 +7,7 @@ class WorkoutListScreen extends ConsumerStatefulWidget {
   final String weekId;
   final String dayId;
   final String dayName;
+  final int weekNumber;
 
   const WorkoutListScreen({
     super.key,
@@ -14,6 +15,7 @@ class WorkoutListScreen extends ConsumerStatefulWidget {
     required this.weekId,
     required this.dayId,
     required this.dayName,
+    required this.weekNumber,
   });
 
   @override
@@ -21,94 +23,111 @@ class WorkoutListScreen extends ConsumerStatefulWidget {
 }
 
 class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
+  // Calculate reps based on week number: week1=12, week2=9, week3=6, week4=3, then repeat
+  int get targetRepsForWeek {
+    final cycleWeek = ((widget.weekNumber - 1) % 4) + 1;
+    switch (cycleWeek) {
+      case 1:
+        return 12;
+      case 2:
+        return 9;
+      case 3:
+        return 6;
+      case 4:
+        return 3;
+      default:
+        return 12;
+    }
+  }
+
   // TODO: Replace with actual data from repository
-  final mockWorkouts = [
-    {
-      'id': 'workout_1',
-      'name': 'Bench Press',
-      'notes': 'Focus on slow eccentric',
-      'sets': [
+  List<Map<String, dynamic>> get mockWorkouts => [
         {
-          'setNumber': 1,
-          'suggestedReps': 10,
-          'suggestedWeight': 135.0,
-          'actualReps': null,
-          'actualWeight': null,
-          'completed': false
+          'id': 'workout_1',
+          'name': 'Bench Press',
+          'notes': 'Focus on slow eccentric',
+          'sets': [
+            {
+              'setNumber': 1,
+              'suggestedReps': targetRepsForWeek,
+              'suggestedWeight': 135.0,
+              'actualReps': null,
+              'actualWeight': null,
+              'completed': false
+            },
+            {
+              'setNumber': 2,
+              'suggestedReps': targetRepsForWeek,
+              'suggestedWeight': 155.0,
+              'actualReps': null,
+              'actualWeight': null,
+              'completed': false
+            },
+            {
+              'setNumber': 3,
+              'suggestedReps': targetRepsForWeek,
+              'suggestedWeight': 175.0,
+              'actualReps': null,
+              'actualWeight': null,
+              'completed': false
+            },
+          ],
         },
         {
-          'setNumber': 2,
-          'suggestedReps': 8,
-          'suggestedWeight': 155.0,
-          'actualReps': null,
-          'actualWeight': null,
-          'completed': false
+          'id': 'workout_2',
+          'name': 'Overhead Press',
+          'notes': null,
+          'sets': [
+            {
+              'setNumber': 1,
+              'suggestedReps': targetRepsForWeek,
+              'suggestedWeight': 75.0,
+              'actualReps': null,
+              'actualWeight': null,
+              'completed': false
+            },
+            {
+              'setNumber': 2,
+              'suggestedReps': targetRepsForWeek,
+              'suggestedWeight': 85.0,
+              'actualReps': null,
+              'actualWeight': null,
+              'completed': false
+            },
+            {
+              'setNumber': 3,
+              'suggestedReps': targetRepsForWeek,
+              'suggestedWeight': 95.0,
+              'actualReps': null,
+              'actualWeight': null,
+              'completed': false
+            },
+          ],
         },
         {
-          'setNumber': 3,
-          'suggestedReps': 6,
-          'suggestedWeight': 175.0,
-          'actualReps': null,
-          'actualWeight': null,
-          'completed': false
+          'id': 'workout_3',
+          'name': 'Incline Dumbbell Press',
+          'notes': '30 degree angle',
+          'sets': [
+            {
+              'setNumber': 1,
+              'suggestedReps': targetRepsForWeek,
+              'suggestedWeight': 60.0,
+              'actualReps': null,
+              'actualWeight': null,
+              'completed': false
+            },
+            {
+              'setNumber': 2,
+              'suggestedReps': targetRepsForWeek,
+              'suggestedWeight': 70.0,
+              'actualReps': null,
+              'actualWeight': null,
+              'completed': false
+            },
+          ],
         },
-      ],
-    },
-    {
-      'id': 'workout_2',
-      'name': 'Overhead Press',
-      'notes': null,
-      'sets': [
-        {
-          'setNumber': 1,
-          'suggestedReps': 12,
-          'suggestedWeight': 75.0,
-          'actualReps': null,
-          'actualWeight': null,
-          'completed': false
-        },
-        {
-          'setNumber': 2,
-          'suggestedReps': 10,
-          'suggestedWeight': 85.0,
-          'actualReps': null,
-          'actualWeight': null,
-          'completed': false
-        },
-        {
-          'setNumber': 3,
-          'suggestedReps': 8,
-          'suggestedWeight': 95.0,
-          'actualReps': null,
-          'actualWeight': null,
-          'completed': false
-        },
-      ],
-    },
-    {
-      'id': 'workout_3',
-      'name': 'Incline Dumbbell Press',
-      'notes': '30 degree angle',
-      'sets': [
-        {
-          'setNumber': 1,
-          'suggestedReps': 12,
-          'suggestedWeight': 60.0,
-          'actualReps': null,
-          'actualWeight': null,
-          'completed': false
-        },
-        {
-          'setNumber': 2,
-          'suggestedReps': 10,
-          'suggestedWeight': 70.0,
-          'actualReps': null,
-          'actualWeight': null,
-          'completed': false
-        },
-      ],
-    },
-  ];
+      ];
 
   int currentWorkoutIndex = 0;
   int? currentSetIndex; // Track which set is currently editable
@@ -454,10 +473,12 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     final weightController = TextEditingController(
       text: getInitialWeight(),
     );
+
+    // Reps are always the suggested reps (set by admin, constant for the week)
+    final targetReps = set['suggestedReps'];
+    final actualReps = set['actualReps'] ?? targetReps;
     final repsController = TextEditingController(
-      text: set['actualReps']?.toString() ??
-          set['suggestedReps']?.toString() ??
-          '',
+      text: actualReps?.toString() ?? '',
     );
 
     return Container(
@@ -598,13 +619,13 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
               ),
               const SizedBox(width: 12),
 
-              // Reps input
+              // Reps input (actual reps completed, target shown above)
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Reps',
+                      'Reps (Target: ${targetReps ?? '?'})',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Theme.of(context)
                                 .colorScheme
@@ -628,7 +649,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        hintText: set['suggestedReps']?.toString(),
+                        hintText: targetReps?.toString(),
                         suffixIcon: isEnabled
                             ? Row(
                                 mainAxisSize: MainAxisSize.min,

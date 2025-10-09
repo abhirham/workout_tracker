@@ -14,6 +14,12 @@ class DaySelectionScreen extends ConsumerWidget {
     required this.weekName,
   });
 
+  int get weekNumber {
+    // Extract week number from weekId (format: 'week_1', 'week_2', etc.)
+    final match = RegExp(r'week_(\d+)').firstMatch(weekId);
+    return match != null ? int.parse(match.group(1)!) : 1;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // TODO: Replace with actual data from repository
@@ -97,7 +103,10 @@ class DaySelectionScreen extends ConsumerWidget {
               'weekId': weekId,
               'dayId': day['id'] as String,
             },
-            queryParameters: {'dayName': day['name'] as String},
+            queryParameters: {
+              'dayName': day['name'] as String,
+              'weekNumber': weekNumber.toString(),
+            },
           );
         },
         borderRadius: BorderRadius.circular(12),
