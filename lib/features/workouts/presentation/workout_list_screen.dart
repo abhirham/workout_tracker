@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
+import '../../../core/database/database_provider.dart';
+import '../../../shared/models/workout_alternative.dart';
 
 class WorkoutListScreen extends ConsumerStatefulWidget {
   final String planId;
@@ -186,6 +189,22 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
       set['completed'] = true;
 
       // TODO: Save to database with workoutAlternativeId if alternative is selected
+      // When implementing database save:
+      // - Include selectedAlternativeId in CompletedSet model
+      // - Use current workout ID (or alternative's originalWorkoutId)
+      // - Save: workoutId, setNumber, actualWeight, actualReps, workoutAlternativeId, completedAt
+      // Example:
+      // final completedSet = CompletedSet(
+      //   id: uuid.v4(),
+      //   userId: userId,
+      //   workoutId: currentWorkout['id'],
+      //   setNumber: set['setNumber'],
+      //   weight: set['actualWeight'],
+      //   reps: set['actualReps'],
+      //   workoutAlternativeId: selectedAlternativeId, // null if original workout
+      //   completedAt: DateTime.now(),
+      // );
+      // await completedSetRepository.save(completedSet);
 
       // Only start timer if not the last set
       final currentWorkout = mockWorkouts[currentWorkoutIndex];
@@ -199,27 +218,67 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     });
   }
 
-  void _showAlternativesModal() {
-    // TODO: Load alternatives from repository
+  Future<void> _showAlternativesModal() async {
     final currentWorkout = mockWorkouts[currentWorkoutIndex];
     final originalWorkoutName = currentWorkout['name'] as String;
+    final originalWorkoutId = currentWorkout['id'] as String;
 
+    // Load alternatives from repository
+    final repository = ref.read(workoutAlternativeRepositoryProvider);
+    // TODO: Get actual userId from auth/profile
+    const userId = 'temp_user_id'; // Placeholder until auth is implemented
+
+    final alternatives = await repository.getAlternativesForWorkout(
+      userId,
+      originalWorkoutId,
+    );
+
+    if (!mounted) return;
+
+    if (!context.mounted) return;
     showModalBottomSheet(
       context: context,
       builder: (context) => _AlternativesBottomSheet(
-        originalWorkoutId: currentWorkout['id'] as String,
+        originalWorkoutId: originalWorkoutId,
         originalWorkoutName: originalWorkoutName,
         selectedAlternativeId: selectedAlternativeId,
+        alternatives: alternatives,
         onAlternativeSelected: (String? altId, String? altName) {
           setState(() {
             selectedAlternativeId = altId;
             selectedAlternativeName = altName;
             // TODO: Reload progress for selected alternative
+            // When implementing:
+            // - Query CompletedSet WHERE workoutId = X AND workoutAlternativeId = altId
+            // - If altId is null, query WHERE workoutId = X AND workoutAlternativeId IS NULL
+            // - Update UI to show progress for selected alternative
+            // - Reset currentSetIndex to first uncompleted set
           });
           Navigator.pop(context);
         },
-        onCreateAlternative: (String name) {
-          // TODO: Create alternative in repository
+        onCreateAlternative: (String name) async {
+          // Create alternative in repository
+          const uuid = Uuid();
+          final newAlternative = WorkoutAlternative(
+            id: uuid.v4(),
+            userId: userId,
+            originalWorkoutId: originalWorkoutId,
+            name: name,
+            createdAt: DateTime.now(),
+          );
+
+          await repository.createAlternative(newAlternative);
+
+          // Auto-select the newly created alternative
+          setState(() {
+            selectedAlternativeId = newAlternative.id;
+            selectedAlternativeName = newAlternative.name;
+            // TODO: Reload progress for selected alternative
+            // Since this is a new alternative, progress should be fresh (no completed sets)
+            // Reset currentSetIndex to 0
+          });
+
+          if (!mounted) return;
           Navigator.pop(context);
         },
       ),
@@ -777,6 +836,7 @@ class _AlternativesBottomSheet extends StatefulWidget {
   final String originalWorkoutId;
   final String originalWorkoutName;
   final String? selectedAlternativeId;
+  final List<WorkoutAlternative> alternatives;
   final Function(String? altId, String? altName) onAlternativeSelected;
   final Function(String name) onCreateAlternative;
 
@@ -784,6 +844,7 @@ class _AlternativesBottomSheet extends StatefulWidget {
     required this.originalWorkoutId,
     required this.originalWorkoutName,
     required this.selectedAlternativeId,
+    required this.alternatives,
     required this.onAlternativeSelected,
     required this.onCreateAlternative,
   });
@@ -794,8 +855,6 @@ class _AlternativesBottomSheet extends StatefulWidget {
 }
 
 class _AlternativesBottomSheetState extends State<_AlternativesBottomSheet> {
-  // TODO: Load alternatives from repository
-  final List<Map<String, String>> mockAlternatives = [];
 
   void _showCreateAlternativeDialog() {
     final controller = TextEditingController();
@@ -859,12 +918,12 @@ class _AlternativesBottomSheetState extends State<_AlternativesBottomSheet> {
             },
           ),
           // Alternative workouts
-          ...mockAlternatives.map((alt) => RadioListTile<String?>(
-                title: Text(alt['name']!),
-                value: alt['id'],
+          ...widget.alternatives.map((alt) => RadioListTile<String?>(
+                title: Text(alt.name),
+                value: alt.id,
                 groupValue: widget.selectedAlternativeId,
                 onChanged: (value) {
-                  widget.onAlternativeSelected(alt['id'], alt['name']);
+                  widget.onAlternativeSelected(alt.id, alt.name);
                 },
               )),
           const Divider(),
