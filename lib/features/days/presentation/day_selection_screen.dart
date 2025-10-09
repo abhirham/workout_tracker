@@ -23,14 +23,14 @@ class DaySelectionScreen extends ConsumerWidget {
         'dayNumber': 1,
         'name': 'Push Day',
         'workoutCount': 5,
-        'completed': true
+        'completed': false
       },
       {
         'id': 'day_2',
         'dayNumber': 2,
         'name': 'Pull Day',
         'workoutCount': 6,
-        'completed': true
+        'completed': false
       },
       {
         'id': 'day_3',

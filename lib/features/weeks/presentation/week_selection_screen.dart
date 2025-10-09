@@ -21,7 +21,7 @@ class WeekSelectionScreen extends ConsumerWidget {
         'id': 'week_${index + 1}',
         'weekNumber': index + 1,
         'name': 'Week ${index + 1}',
-        'daysCompleted': (index % 3) * 2, // Mock progress
+        'daysCompleted': 0, // Fresh start - no progress
         'totalDays': 6,
       },
     );

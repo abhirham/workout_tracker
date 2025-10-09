@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -31,9 +32,9 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
           'setNumber': 1,
           'suggestedReps': 10,
           'suggestedWeight': 135.0,
-          'actualReps': 10,
-          'actualWeight': 135.0,
-          'completed': true
+          'actualReps': null,
+          'actualWeight': null,
+          'completed': false
         },
         {
           'setNumber': 2,
@@ -110,6 +111,61 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   ];
 
   int currentWorkoutIndex = 0;
+  int? currentSetIndex; // Track which set is currently editable
+  int? timerSeconds; // Countdown timer
+  bool isTimerRunning = false;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Find the first uncompleted set, or default to 0
+    final currentWorkout = mockWorkouts[currentWorkoutIndex];
+    final sets = currentWorkout['sets'] as List;
+    currentSetIndex = sets.indexWhere((set) => set['completed'] == false);
+    if (currentSetIndex == -1) {
+      currentSetIndex = 0; // All completed, reset to first
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _startTimer() {
+    setState(() {
+      timerSeconds = 45;
+      isTimerRunning = true;
+    });
+
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        if (timerSeconds! > 0) {
+          timerSeconds = timerSeconds! - 1;
+        } else {
+          timer.cancel();
+          isTimerRunning = false;
+          // Move to next set
+          final currentWorkout = mockWorkouts[currentWorkoutIndex];
+          final sets = currentWorkout['sets'] as List;
+          if (currentSetIndex! < sets.length - 1) {
+            currentSetIndex = currentSetIndex! + 1;
+          }
+          timerSeconds = null;
+        }
+      });
+    });
+  }
+
+  void _saveSet(Map<String, dynamic> set, int setIndex) {
+    setState(() {
+      set['completed'] = true;
+      _startTimer();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -134,6 +190,30 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
       ),
       body: Column(
         children: [
+          if (isTimerRunning && timerSeconds != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              color: Theme.of(context).colorScheme.primaryContainer,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.timer,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Rest: ${timerSeconds}s',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color:
+                              Theme.of(context).colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ],
+              ),
+            ),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -250,136 +330,289 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
             ),
           ),
           const Divider(height: 1),
-          ...sets.map((set) => _buildSetRow(context, workout, set)),
+          ...sets.asMap().entries.map((entry) {
+            final index = entry.key;
+            final set = entry.value;
+            return _buildSetRow(context, workout, set, index);
+          }),
         ],
       ),
     );
   }
 
   Widget _buildSetRow(
-      BuildContext context, Map<String, dynamic> workout, Map<String, dynamic> set) {
+      BuildContext context,
+      Map<String, dynamic> workout,
+      Map<String, dynamic> set,
+      int setIndex) {
+    final isCurrentSet = currentSetIndex == setIndex;
+    final isCompleted = set['completed'] as bool;
+    final isEnabled = isCurrentSet && !isTimerRunning;
+
+    // Get weight from previous set if it exists and current set has no value
+    String getInitialWeight() {
+      if (set['actualWeight'] != null) {
+        return set['actualWeight'].toString();
+      }
+
+      // Look for previous set's weight
+      if (setIndex > 0) {
+        final sets = workout['sets'] as List;
+        final previousSet = sets[setIndex - 1];
+        if (previousSet['actualWeight'] != null) {
+          return previousSet['actualWeight'].toString();
+        }
+      }
+
+      // Fall back to suggested weight or empty
+      return set['suggestedWeight']?.toString() ?? '';
+    }
+
     final weightController = TextEditingController(
-      text: set['actualWeight']?.toString() ?? set['suggestedWeight']?.toString() ?? '',
+      text: getInitialWeight(),
     );
     final repsController = TextEditingController(
-      text: set['actualReps']?.toString() ?? set['suggestedReps']?.toString() ?? '',
+      text: set['actualReps']?.toString() ??
+          set['suggestedReps']?.toString() ??
+          '',
     );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
+      decoration: BoxDecoration(
+        color: isCurrentSet && !isCompleted
+            ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
+            : null,
+      ),
+      child: Column(
         children: [
-          // Set number
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: set['completed'] == true
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.surfaceContainerHighest,
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                '${set['setNumber']}',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: set['completed'] == true
-                          ? Theme.of(context).colorScheme.onPrimary
-                          : Theme.of(context).colorScheme.onSurface,
-                      fontWeight: FontWeight.bold,
+          Row(
+            children: [
+              // Set number
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: isCompleted
+                      ? Theme.of(context).colorScheme.primary
+                      : isCurrentSet
+                          ? Theme.of(context).colorScheme.secondaryContainer
+                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: isCompleted
+                      ? Icon(
+                          Icons.check,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                          size: 20,
+                        )
+                      : Text(
+                          '${set['setNumber']}',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: isCurrentSet
+                                        ? Theme.of(context)
+                                            .colorScheme
+                                            .onSecondaryContainer
+                                        : Theme.of(context).colorScheme.onSurface,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 16),
+
+              // Weight input
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Weight (kg)',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withOpacity(0.6),
+                          ),
                     ),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: weightController,
+                      enabled: isEnabled,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.only(
+                          left: 12,
+                          right: 60,
+                          top: 8,
+                          bottom: 8,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        hintText: set['suggestedWeight']?.toString(),
+                        suffixIcon: isEnabled
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  InkWell(
+                                    onTap: () {
+                                      final currentValue =
+                                          double.tryParse(weightController.text) ??
+                                              0;
+                                      final newValue =
+                                          (currentValue - 1).clamp(0, 9999);
+                                      weightController.text =
+                                          newValue.toStringAsFixed(1);
+                                      set['actualWeight'] = newValue;
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      child: Icon(
+                                        Icons.remove,
+                                        size: 16,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                  InkWell(
+                                    onTap: () {
+                                      final currentValue =
+                                          double.tryParse(weightController.text) ??
+                                              0;
+                                      final newValue = currentValue + 1;
+                                      weightController.text =
+                                          newValue.toStringAsFixed(1);
+                                      set['actualWeight'] = newValue;
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      child: Icon(
+                                        Icons.add,
+                                        size: 16,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : null,
+                      ),
+                      onChanged: (value) {
+                        set['actualWeight'] = double.tryParse(value);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Reps input
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Reps',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withOpacity(0.6),
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: repsController,
+                      enabled: isEnabled,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.only(
+                          left: 12,
+                          right: 60,
+                          top: 8,
+                          bottom: 8,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        hintText: set['suggestedReps']?.toString(),
+                        suffixIcon: isEnabled
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  InkWell(
+                                    onTap: () {
+                                      final currentValue =
+                                          int.tryParse(repsController.text) ?? 0;
+                                      final newValue =
+                                          (currentValue - 1).clamp(0, 9999);
+                                      repsController.text = newValue.toString();
+                                      set['actualReps'] = newValue;
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      child: Icon(
+                                        Icons.remove,
+                                        size: 16,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                  InkWell(
+                                    onTap: () {
+                                      final currentValue =
+                                          int.tryParse(repsController.text) ?? 0;
+                                      final newValue = currentValue + 1;
+                                      repsController.text = newValue.toString();
+                                      set['actualReps'] = newValue;
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      child: Icon(
+                                        Icons.add,
+                                        size: 16,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : null,
+                      ),
+                      onChanged: (value) {
+                        set['actualReps'] = int.tryParse(value);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          // Save button in new row (only show for current set if not completed)
+          if (isCurrentSet && !isCompleted) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: isEnabled ? () => _saveSet(set, setIndex) : null,
+                child: const Text('Save'),
               ),
             ),
-          ),
-          const SizedBox(width: 16),
-
-          // Weight input
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Weight (kg)',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withOpacity(0.6),
-                      ),
-                ),
-                const SizedBox(height: 4),
-                TextField(
-                  controller: weightController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    hintText: set['suggestedWeight']?.toString(),
-                  ),
-                  onChanged: (value) {
-                    // TODO: Save to local database with debouncing
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // Reps input
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Reps',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withOpacity(0.6),
-                      ),
-                ),
-                const SizedBox(height: 4),
-                TextField(
-                  controller: repsController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    hintText: set['suggestedReps']?.toString(),
-                  ),
-                  onChanged: (value) {
-                    // TODO: Save to local database with debouncing
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // Complete checkbox
-          Checkbox(
-            value: set['completed'] as bool,
-            onChanged: (value) {
-              setState(() {
-                set['completed'] = value ?? false;
-                // TODO: Save to local database and trigger timer
-              });
-            },
-          ),
+          ],
         ],
       ),
     );
