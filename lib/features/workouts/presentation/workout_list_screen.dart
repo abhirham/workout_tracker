@@ -163,7 +163,16 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   void _saveSet(Map<String, dynamic> set, int setIndex) {
     setState(() {
       set['completed'] = true;
-      _startTimer();
+
+      // Only start timer if not the last set
+      final currentWorkout = mockWorkouts[currentWorkoutIndex];
+      final sets = currentWorkout['sets'] as List;
+      if (setIndex < sets.length - 1) {
+        _startTimer();
+      } else {
+        // Last set - move to next set index without timer
+        currentSetIndex = setIndex + 1;
+      }
     });
   }
 
@@ -191,27 +200,54 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
       body: Column(
         children: [
           if (isTimerRunning && timerSeconds != null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              color: Theme.of(context).colorScheme.primaryContainer,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.timer,
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Rest: ${timerSeconds}s',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color:
-                              Theme.of(context).colorScheme.onPrimaryContainer,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                ],
+            InkWell(
+              onTap: () {
+                // Skip timer
+                _timer?.cancel();
+                setState(() {
+                  isTimerRunning = false;
+                  timerSeconds = null;
+                  // Move to next set
+                  final currentWorkout = mockWorkouts[currentWorkoutIndex];
+                  final sets = currentWorkout['sets'] as List;
+                  if (currentSetIndex! < sets.length - 1) {
+                    currentSetIndex = currentSetIndex! + 1;
+                  }
+                });
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                color: Theme.of(context).colorScheme.primaryContainer,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.timer,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Rest: ${timerSeconds}s',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer,
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '(tap to skip)',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer
+                                .withOpacity(0.7),
+                          ),
+                    ),
+                  ],
+                ),
               ),
             ),
           Expanded(
@@ -249,6 +285,17 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                   onPressed: () {
                     setState(() {
                       currentWorkoutIndex--;
+                      // Reset to first uncompleted set for previous workout
+                      final workout = mockWorkouts[currentWorkoutIndex];
+                      final sets = workout['sets'] as List;
+                      currentSetIndex = sets.indexWhere((set) => set['completed'] == false);
+                      if (currentSetIndex == -1) {
+                        currentSetIndex = 0;
+                      }
+                      // Cancel any running timer
+                      _timer?.cancel();
+                      isTimerRunning = false;
+                      timerSeconds = null;
                     });
                   },
                   child: const Text('Previous'),
@@ -266,6 +313,17 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                     : () {
                         setState(() {
                           currentWorkoutIndex++;
+                          // Reset to first uncompleted set for next workout
+                          final workout = mockWorkouts[currentWorkoutIndex];
+                          final sets = workout['sets'] as List;
+                          currentSetIndex = sets.indexWhere((set) => set['completed'] == false);
+                          if (currentSetIndex == -1) {
+                            currentSetIndex = 0;
+                          }
+                          // Cancel any running timer
+                          _timer?.cancel();
+                          isTimerRunning = false;
+                          timerSeconds = null;
                         });
                       },
                 child: Text(isLastWorkout ? 'Finish' : 'Next'),
@@ -429,7 +487,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Weight (kg)',
+                      'Weight (lbs)',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Theme.of(context)
                                 .colorScheme
@@ -465,7 +523,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                                           double.tryParse(weightController.text) ??
                                               0;
                                       final newValue =
-                                          (currentValue - 1).clamp(0, 9999);
+                                          (currentValue - 2.5).clamp(0, 9999);
                                       weightController.text =
                                           newValue.toStringAsFixed(1);
                                       set['actualWeight'] = newValue;
@@ -486,7 +544,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                                       final currentValue =
                                           double.tryParse(weightController.text) ??
                                               0;
-                                      final newValue = currentValue + 1;
+                                      final newValue = currentValue + 5;
                                       weightController.text =
                                           newValue.toStringAsFixed(1);
                                       set['actualWeight'] = newValue;
