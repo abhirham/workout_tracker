@@ -89,6 +89,7 @@ class CompletedSets extends Table {
   RealColumn get weight => real()();
   IntColumn get reps => integer()();
   DateTimeColumn get completedAt => dateTime()();
+  TextColumn get workoutAlternativeId => text().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -102,6 +103,18 @@ class WorkoutProgressTable extends Table {
 
   @override
   Set<Column> get primaryKey => {userId, workoutId};
+}
+
+// User-Specific Workout Alternatives
+class WorkoutAlternatives extends Table {
+  TextColumn get id => text()();
+  TextColumn get userId => text()();
+  TextColumn get originalWorkoutId => text()();
+  TextColumn get name => text()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
 }
 
 // Sync Management
@@ -128,13 +141,31 @@ class SyncQueue extends Table {
   UserProfiles,
   CompletedSets,
   WorkoutProgressTable,
+  WorkoutAlternatives,
   SyncQueue,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration {
+    return MigrationStrategy(
+      onCreate: (Migrator m) async {
+        await m.createAll();
+      },
+      onUpgrade: (Migrator m, int from, int to) async {
+        if (from < 2) {
+          // Add workoutAlternativeId column to CompletedSets
+          await m.addColumn(completedSets, completedSets.workoutAlternativeId);
+          // Create WorkoutAlternatives table
+          await m.createTable(workoutAlternatives);
+        }
+      },
+    );
+  }
 }
 
 LazyDatabase _openConnection() {

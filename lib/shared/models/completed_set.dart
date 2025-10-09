@@ -13,6 +13,7 @@ class CompletedSet with _$CompletedSet {
     required double weight,
     required int reps,
     required DateTime completedAt,
+    String? workoutAlternativeId,
   }) = _CompletedSet;
 
   factory CompletedSet.fromJson(Map<String, dynamic> json) =>

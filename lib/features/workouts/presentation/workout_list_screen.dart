@@ -134,6 +134,8 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   int? timerSeconds; // Countdown timer
   bool isTimerRunning = false;
   Timer? _timer;
+  String? selectedAlternativeId; // null = original workout
+  String? selectedAlternativeName; // Name of selected alternative
 
   @override
   void initState() {
@@ -183,6 +185,8 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     setState(() {
       set['completed'] = true;
 
+      // TODO: Save to database with workoutAlternativeId if alternative is selected
+
       // Only start timer if not the last set
       final currentWorkout = mockWorkouts[currentWorkoutIndex];
       final sets = currentWorkout['sets'] as List;
@@ -193,6 +197,33 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
         currentSetIndex = setIndex + 1;
       }
     });
+  }
+
+  void _showAlternativesModal() {
+    // TODO: Load alternatives from repository
+    final currentWorkout = mockWorkouts[currentWorkoutIndex];
+    final originalWorkoutName = currentWorkout['name'] as String;
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => _AlternativesBottomSheet(
+        originalWorkoutId: currentWorkout['id'] as String,
+        originalWorkoutName: originalWorkoutName,
+        selectedAlternativeId: selectedAlternativeId,
+        onAlternativeSelected: (String? altId, String? altName) {
+          setState(() {
+            selectedAlternativeId = altId;
+            selectedAlternativeName = altName;
+            // TODO: Reload progress for selected alternative
+          });
+          Navigator.pop(context);
+        },
+        onCreateAlternative: (String name) {
+          // TODO: Create alternative in repository
+          Navigator.pop(context);
+        },
+      ),
+    );
   }
 
   @override
@@ -382,6 +413,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   Widget _buildWorkoutCard(BuildContext context, Map<String, dynamic> workout) {
     final sets = workout['sets'] as List;
     final completedSets = sets.where((s) => s['completed'] == true).length;
+    final displayName = selectedAlternativeName ?? (workout['name'] as String);
 
     return Card(
       child: Column(
@@ -391,11 +423,28 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  workout['name'] as String,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        displayName,
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
                       ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _showAlternativesModal,
+                      icon: const Icon(Icons.swap_horiz, size: 18),
+                      label: const Text('Alternatives'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 if (workout['notes'] != null) ...[
                   const SizedBox(height: 8),
@@ -717,6 +766,114 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+// Bottom sheet widget for selecting/creating alternatives
+class _AlternativesBottomSheet extends StatefulWidget {
+  final String originalWorkoutId;
+  final String originalWorkoutName;
+  final String? selectedAlternativeId;
+  final Function(String? altId, String? altName) onAlternativeSelected;
+  final Function(String name) onCreateAlternative;
+
+  const _AlternativesBottomSheet({
+    required this.originalWorkoutId,
+    required this.originalWorkoutName,
+    required this.selectedAlternativeId,
+    required this.onAlternativeSelected,
+    required this.onCreateAlternative,
+  });
+
+  @override
+  State<_AlternativesBottomSheet> createState() =>
+      _AlternativesBottomSheetState();
+}
+
+class _AlternativesBottomSheetState extends State<_AlternativesBottomSheet> {
+  // TODO: Load alternatives from repository
+  final List<Map<String, String>> mockAlternatives = [];
+
+  void _showCreateAlternativeDialog() {
+    final controller = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create Alternative'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Alternative Name',
+            hintText: 'e.g., Dumbbell Press',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (controller.text.trim().isNotEmpty) {
+                widget.onCreateAlternative(controller.text.trim());
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Select Workout',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Original workout option
+          RadioListTile<String?>(
+            title: Text('Original: ${widget.originalWorkoutName}'),
+            value: null,
+            groupValue: widget.selectedAlternativeId,
+            onChanged: (value) {
+              widget.onAlternativeSelected(null, null);
+            },
+          ),
+          // Alternative workouts
+          ...mockAlternatives.map((alt) => RadioListTile<String?>(
+                title: Text(alt['name']!),
+                value: alt['id'],
+                groupValue: widget.selectedAlternativeId,
+                onChanged: (value) {
+                  widget.onAlternativeSelected(alt['id'], alt['name']);
+                },
+              )),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.add_circle_outline),
+            title: const Text('Create New Alternative'),
+            onTap: _showCreateAlternativeDialog,
+          ),
+          const SizedBox(height: 8),
         ],
       ),
     );
