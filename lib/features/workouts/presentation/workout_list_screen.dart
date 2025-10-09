@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../shared/models/workout_alternative.dart';
+import '../../../shared/models/completed_set.dart';
 
 class WorkoutListScreen extends ConsumerStatefulWidget {
   final String planId;
@@ -43,94 +44,9 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     }
   }
 
-  // TODO: Replace with actual data from repository
-  List<Map<String, dynamic>> get mockWorkouts => [
-        {
-          'id': 'workout_1',
-          'name': 'Bench Press',
-          'notes': 'Focus on slow eccentric',
-          'sets': [
-            {
-              'setNumber': 1,
-              'suggestedReps': targetRepsForWeek,
-              'suggestedWeight': 135.0,
-              'actualReps': null,
-              'actualWeight': null,
-              'completed': false
-            },
-            {
-              'setNumber': 2,
-              'suggestedReps': targetRepsForWeek,
-              'suggestedWeight': 155.0,
-              'actualReps': null,
-              'actualWeight': null,
-              'completed': false
-            },
-            {
-              'setNumber': 3,
-              'suggestedReps': targetRepsForWeek,
-              'suggestedWeight': 175.0,
-              'actualReps': null,
-              'actualWeight': null,
-              'completed': false
-            },
-          ],
-        },
-        {
-          'id': 'workout_2',
-          'name': 'Overhead Press',
-          'notes': null,
-          'sets': [
-            {
-              'setNumber': 1,
-              'suggestedReps': targetRepsForWeek,
-              'suggestedWeight': 75.0,
-              'actualReps': null,
-              'actualWeight': null,
-              'completed': false
-            },
-            {
-              'setNumber': 2,
-              'suggestedReps': targetRepsForWeek,
-              'suggestedWeight': 85.0,
-              'actualReps': null,
-              'actualWeight': null,
-              'completed': false
-            },
-            {
-              'setNumber': 3,
-              'suggestedReps': targetRepsForWeek,
-              'suggestedWeight': 95.0,
-              'actualReps': null,
-              'actualWeight': null,
-              'completed': false
-            },
-          ],
-        },
-        {
-          'id': 'workout_3',
-          'name': 'Incline Dumbbell Press',
-          'notes': '30 degree angle',
-          'sets': [
-            {
-              'setNumber': 1,
-              'suggestedReps': targetRepsForWeek,
-              'suggestedWeight': 60.0,
-              'actualReps': null,
-              'actualWeight': null,
-              'completed': false
-            },
-            {
-              'setNumber': 2,
-              'suggestedReps': targetRepsForWeek,
-              'suggestedWeight': 70.0,
-              'actualReps': null,
-              'actualWeight': null,
-              'completed': false
-            },
-          ],
-        },
-      ];
+  // Workouts loaded from database
+  List<Map<String, dynamic>> workouts = [];
+  bool isLoading = true;
 
   int currentWorkoutIndex = 0;
   int? currentSetIndex; // Track which set is currently editable
@@ -143,13 +59,95 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   @override
   void initState() {
     super.initState();
-    // Find the first uncompleted set, or default to 0
-    final currentWorkout = mockWorkouts[currentWorkoutIndex];
-    final sets = currentWorkout['sets'] as List;
-    currentSetIndex = sets.indexWhere((set) => set['completed'] == false);
-    if (currentSetIndex == -1) {
-      currentSetIndex = 0; // All completed, reset to first
+    // Load workouts from database first, then load progress
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadWorkouts();
+    });
+  }
+
+  Future<void> _loadWorkouts() async {
+    setState(() {
+      isLoading = true;
+    });
+
+    final repository = ref.read(workoutTemplateRepositoryProvider);
+    final workoutsWithSets = await repository.getWorkoutsForDay(widget.dayId);
+
+    setState(() {
+      workouts = workoutsWithSets.map((workoutWithSets) {
+        return {
+          'id': workoutWithSets.workout.id,
+          'name': workoutWithSets.workout.name,
+          'notes': workoutWithSets.workout.notes,
+          'timerSeconds': workoutWithSets.timerConfig?.durationSeconds ?? 45,
+          'sets': workoutWithSets.sets.map((setTemplate) {
+            return {
+              'setNumber': setTemplate.setNumber,
+              'suggestedReps': setTemplate.suggestedReps,
+              'suggestedWeight': setTemplate.suggestedWeight,
+              'actualReps': null,
+              'actualWeight': null,
+              'completed': false,
+            };
+          }).toList(),
+        };
+      }).toList();
+      isLoading = false;
+    });
+
+    // Load progress after workouts are loaded
+    if (workouts.isNotEmpty) {
+      await _loadWorkoutProgress();
     }
+  }
+
+  Future<void> _loadWorkoutProgress() async {
+    final repository = ref.read(completedSetRepositoryProvider);
+    const userId = 'temp_user_id'; // TODO: Get actual userId from auth/profile
+    final currentWorkout = workouts[currentWorkoutIndex];
+    final workoutId = currentWorkout['id'] as String;
+
+    // Get all completed sets for this workout (filtered by alternative if selected)
+    final completedSets = await repository.getCompletedSetsForWorkout(
+      userId,
+      workoutId,
+      alternativeId: selectedAlternativeId,
+    );
+
+    // Build a map of setNumber -> most recent completed set
+    final Map<int, CompletedSet> latestSets = {};
+    for (final completedSet in completedSets) {
+      final setNumber = completedSet.setNumber;
+      if (!latestSets.containsKey(setNumber) ||
+          completedSet.completedAt.isAfter(latestSets[setNumber]!.completedAt)) {
+        latestSets[setNumber] = completedSet;
+      }
+    }
+
+    setState(() {
+      // Update mock workout data with loaded progress
+      final sets = currentWorkout['sets'] as List;
+      for (final set in sets) {
+        final setNumber = set['setNumber'] as int;
+        if (latestSets.containsKey(setNumber)) {
+          final completedSet = latestSets[setNumber]!;
+          set['actualWeight'] = completedSet.weight;
+          set['actualReps'] = completedSet.reps;
+          set['completed'] = true;
+        } else {
+          // Reset if no progress for this alternative
+          set['actualWeight'] = null;
+          set['actualReps'] = null;
+          set['completed'] = false;
+        }
+      }
+
+      // Find the first uncompleted set, or default to 0
+      currentSetIndex = sets.indexWhere((set) => set['completed'] == false);
+      if (currentSetIndex == -1) {
+        currentSetIndex = 0; // All completed, reset to first
+      }
+    });
   }
 
   @override
@@ -173,7 +171,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
           timer.cancel();
           isTimerRunning = false;
           // Move to next set
-          final currentWorkout = mockWorkouts[currentWorkoutIndex];
+          final currentWorkout = workouts[currentWorkoutIndex];
           final sets = currentWorkout['sets'] as List;
           if (currentSetIndex! < sets.length - 1) {
             currentSetIndex = currentSetIndex! + 1;
@@ -184,30 +182,39 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     });
   }
 
-  void _saveSet(Map<String, dynamic> set, int setIndex) {
+  void _resetWorkoutState() {
+    // Cancel any running timer
+    _timer?.cancel();
+    isTimerRunning = false;
+    timerSeconds = null;
+    // Load progress from database (will reset if no progress exists for current alternative)
+    _loadWorkoutProgress();
+  }
+
+  Future<void> _saveSet(Map<String, dynamic> set, int setIndex) async {
+    // Save to database
+    final repository = ref.read(completedSetRepositoryProvider);
+    const userId = 'temp_user_id'; // TODO: Get actual userId from auth/profile
+    final currentWorkout = workouts[currentWorkoutIndex];
+    const uuid = Uuid();
+
+    final completedSet = CompletedSet(
+      id: uuid.v4(),
+      userId: userId,
+      workoutId: currentWorkout['id'] as String,
+      setNumber: set['setNumber'] as int,
+      weight: (set['actualWeight'] as double?) ?? 0.0,
+      reps: (set['actualReps'] as int?) ?? 0,
+      workoutAlternativeId: selectedAlternativeId, // null if original workout
+      completedAt: DateTime.now(),
+    );
+
+    await repository.saveCompletedSet(completedSet);
+
     setState(() {
       set['completed'] = true;
 
-      // TODO: Save to database with workoutAlternativeId if alternative is selected
-      // When implementing database save:
-      // - Include selectedAlternativeId in CompletedSet model
-      // - Use current workout ID (or alternative's originalWorkoutId)
-      // - Save: workoutId, setNumber, actualWeight, actualReps, workoutAlternativeId, completedAt
-      // Example:
-      // final completedSet = CompletedSet(
-      //   id: uuid.v4(),
-      //   userId: userId,
-      //   workoutId: currentWorkout['id'],
-      //   setNumber: set['setNumber'],
-      //   weight: set['actualWeight'],
-      //   reps: set['actualReps'],
-      //   workoutAlternativeId: selectedAlternativeId, // null if original workout
-      //   completedAt: DateTime.now(),
-      // );
-      // await completedSetRepository.save(completedSet);
-
       // Only start timer if not the last set
-      final currentWorkout = mockWorkouts[currentWorkoutIndex];
       final sets = currentWorkout['sets'] as List;
       if (setIndex < sets.length - 1) {
         _startTimer();
@@ -219,7 +226,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   }
 
   Future<void> _showAlternativesModal() async {
-    final currentWorkout = mockWorkouts[currentWorkoutIndex];
+    final currentWorkout = workouts[currentWorkoutIndex];
     final originalWorkoutName = currentWorkout['name'] as String;
     final originalWorkoutId = currentWorkout['id'] as String;
 
@@ -247,13 +254,9 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
           setState(() {
             selectedAlternativeId = altId;
             selectedAlternativeName = altName;
-            // TODO: Reload progress for selected alternative
-            // When implementing:
-            // - Query CompletedSet WHERE workoutId = X AND workoutAlternativeId = altId
-            // - If altId is null, query WHERE workoutId = X AND workoutAlternativeId IS NULL
-            // - Update UI to show progress for selected alternative
-            // - Reset currentSetIndex to first uncompleted set
           });
+          // Load progress for selected alternative (resets if no progress exists)
+          _resetWorkoutState();
           Navigator.pop(context);
         },
         onCreateAlternative: (String name) async {
@@ -270,15 +273,15 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
           await repository.createAlternative(newAlternative);
 
           // Auto-select the newly created alternative
+          if (!mounted) return;
           setState(() {
             selectedAlternativeId = newAlternative.id;
             selectedAlternativeName = newAlternative.name;
-            // TODO: Reload progress for selected alternative
-            // Since this is a new alternative, progress should be fresh (no completed sets)
-            // Reset currentSetIndex to 0
+            // Reset workout state for fresh start (new alternatives always start fresh)
+            _resetWorkoutState();
           });
 
-          if (!mounted) return;
+          if (!context.mounted) return;
           Navigator.pop(context);
         },
       ),
@@ -287,95 +290,110 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentWorkout = mockWorkouts[currentWorkoutIndex];
-    final isLastWorkout = currentWorkoutIndex == mockWorkouts.length - 1;
-
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.dayName),
         centerTitle: true,
-        actions: [
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: Text(
-                '${currentWorkoutIndex + 1}/${mockWorkouts.length}',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          if (isTimerRunning && timerSeconds != null)
-            InkWell(
-              onTap: () {
-                // Skip timer
-                _timer?.cancel();
-                setState(() {
-                  isTimerRunning = false;
-                  timerSeconds = null;
-                  // Move to next set
-                  final currentWorkout = mockWorkouts[currentWorkoutIndex];
-                  final sets = currentWorkout['sets'] as List;
-                  if (currentSetIndex! < sets.length - 1) {
-                    currentSetIndex = currentSetIndex! + 1;
-                  }
-                });
-              },
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                color: Theme.of(context).colorScheme.primaryContainer,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.timer,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+        actions: !isLoading && workouts.isNotEmpty
+            ? [
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: Text(
+                      '${currentWorkoutIndex + 1}/${workouts.length}',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Rest: ${timerSeconds}s',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onPrimaryContainer,
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '(tap to skip)',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onPrimaryContainer
-                                .withOpacity(0.7),
-                          ),
-                    ),
-                  ],
+                  ),
                 ),
+              ]
+            : null,
+      ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : workouts.isEmpty
+              ? Center(
+                  child: Text(
+                    'No workouts for this day',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                )
+              : _buildWorkoutContent(),
+    );
+  }
+
+  Widget _buildWorkoutContent() {
+    final currentWorkout = workouts[currentWorkoutIndex];
+    final isLastWorkout = currentWorkoutIndex == workouts.length - 1;
+
+    return Column(
+      children: [
+        if (isTimerRunning && timerSeconds != null)
+          InkWell(
+            onTap: () {
+              // Skip timer
+              _timer?.cancel();
+              setState(() {
+                isTimerRunning = false;
+                timerSeconds = null;
+                // Move to next set
+                final currentWorkout = workouts[currentWorkoutIndex];
+                final sets = currentWorkout['sets'] as List;
+                if (currentSetIndex! < sets.length - 1) {
+                  currentSetIndex = currentSetIndex! + 1;
+                }
+              });
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              color: Theme.of(context).colorScheme.primaryContainer,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.timer,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Rest: ${timerSeconds}s',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onPrimaryContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '(tap to skip)',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onPrimaryContainer
+                              .withOpacity(0.7),
+                        ),
+                  ),
+                ],
               ),
             ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: _buildWorkoutCard(context, currentWorkout),
-            ),
           ),
-          _buildNavigationButtons(context, isLastWorkout),
-        ],
-      ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: _buildWorkoutCard(context, currentWorkout),
+          ),
+        ),
+        _buildNavigationButtons(context, isLastWorkout),
+      ],
     );
   }
 
   Widget _buildNavigationButtons(BuildContext context, bool isLastWorkout) {
     // Get next exercise name if available
     String? nextExerciseName;
-    if (!isLastWorkout && currentWorkoutIndex < mockWorkouts.length - 1) {
-      nextExerciseName = mockWorkouts[currentWorkoutIndex + 1]['name'] as String;
+    if (!isLastWorkout && currentWorkoutIndex < workouts.length - 1) {
+      nextExerciseName = workouts[currentWorkoutIndex + 1]['name'] as String;
     }
 
     return Container(
@@ -403,19 +421,16 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                       onPressed: () {
                         setState(() {
                           currentWorkoutIndex--;
-                          // Reset to first uncompleted set for previous workout
-                          final workout = mockWorkouts[currentWorkoutIndex];
-                          final sets = workout['sets'] as List;
-                          currentSetIndex =
-                              sets.indexWhere((set) => set['completed'] == false);
-                          if (currentSetIndex == -1) {
-                            currentSetIndex = 0;
-                          }
                           // Cancel any running timer
                           _timer?.cancel();
                           isTimerRunning = false;
                           timerSeconds = null;
+                          // Clear alternative selection when navigating to different workout
+                          selectedAlternativeId = null;
+                          selectedAlternativeName = null;
                         });
+                        // Load progress for previous workout
+                        _loadWorkoutProgress();
                       },
                       child: const Text('Previous'),
                     ),
@@ -432,19 +447,16 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                         : () {
                             setState(() {
                               currentWorkoutIndex++;
-                              // Reset to first uncompleted set for next workout
-                              final workout = mockWorkouts[currentWorkoutIndex];
-                              final sets = workout['sets'] as List;
-                              currentSetIndex = sets
-                                  .indexWhere((set) => set['completed'] == false);
-                              if (currentSetIndex == -1) {
-                                currentSetIndex = 0;
-                              }
                               // Cancel any running timer
                               _timer?.cancel();
                               isTimerRunning = false;
                               timerSeconds = null;
+                              // Clear alternative selection when navigating to different workout
+                              selectedAlternativeId = null;
+                              selectedAlternativeName = null;
                             });
+                            // Load progress for next workout
+                            _loadWorkoutProgress();
                           },
                     child: Text(isLastWorkout ? 'Finish' : 'Next'),
                   ),
@@ -557,12 +569,13 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
       int setIndex) {
     final isCurrentSet = currentSetIndex == setIndex;
     final isCompleted = set['completed'] as bool;
+    // Allow editing if current set and not timer running (including completed sets)
     final isEnabled = isCurrentSet && !isTimerRunning;
 
     // Get weight from previous set if it exists and current set has no value
-    String getInitialWeight() {
+    double? getInitialWeight() {
       if (set['actualWeight'] != null) {
-        return set['actualWeight'].toString();
+        return set['actualWeight'] as double;
       }
 
       // Look for previous set's weight
@@ -570,33 +583,57 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
         final sets = workout['sets'] as List;
         final previousSet = sets[setIndex - 1];
         if (previousSet['actualWeight'] != null) {
-          return previousSet['actualWeight'].toString();
+          return previousSet['actualWeight'] as double;
         }
       }
 
-      // Fall back to suggested weight or empty
-      return set['suggestedWeight']?.toString() ?? '';
+      // Fall back to suggested weight
+      return set['suggestedWeight'] as double?;
+    }
+
+    final initialWeight = getInitialWeight();
+    // Set the actual weight in the map if not already set
+    if (set['actualWeight'] == null && initialWeight != null) {
+      set['actualWeight'] = initialWeight;
     }
 
     final weightController = TextEditingController(
-      text: getInitialWeight(),
+      text: initialWeight?.toString() ?? '',
     );
 
     // Reps are always the suggested reps (set by admin, constant for the week)
     final targetReps = set['suggestedReps'];
     final actualReps = set['actualReps'] ?? targetReps;
+    // Set the actual reps in the map if not already set
+    if (set['actualReps'] == null && actualReps != null) {
+      set['actualReps'] = actualReps;
+    }
+
     final repsController = TextEditingController(
       text: actualReps?.toString() ?? '',
     );
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: isCurrentSet && !isCompleted
-            ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
-            : null,
-      ),
-      child: Column(
+    return InkWell(
+      onTap: isCompleted
+          ? () {
+              // Make completed set editable (keep it completed, just make it active)
+              setState(() {
+                currentSetIndex = setIndex;
+                // Cancel any running timer
+                _timer?.cancel();
+                isTimerRunning = false;
+                timerSeconds = null;
+              });
+            }
+          : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isCurrentSet && !isCompleted
+              ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
+              : null,
+        ),
+        child: Column(
         children: [
           Row(
             children: [
@@ -814,8 +851,8 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
               ),
             ],
           ),
-          // Save button in new row (only show for current set if not completed)
-          if (isCurrentSet && !isCompleted) ...[
+          // Save button in new row (show for current set, even if already completed for re-editing)
+          if (isCurrentSet) ...[
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
@@ -826,6 +863,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
             ),
           ],
         ],
+        ),
       ),
     );
   }

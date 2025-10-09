@@ -148,7 +148,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration {
@@ -162,6 +162,16 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(completedSets, completedSets.workoutAlternativeId);
           // Create WorkoutAlternatives table
           await m.createTable(workoutAlternatives);
+        }
+        if (from < 3) {
+          // Clear all template data to allow re-seeding with new week-specific day IDs
+          // Must delete in correct order due to foreign key constraints
+          await customStatement('DELETE FROM set_templates');
+          await customStatement('DELETE FROM timer_configs');
+          await customStatement('DELETE FROM workouts');
+          await customStatement('DELETE FROM days');
+          await customStatement('DELETE FROM weeks');
+          await customStatement('DELETE FROM workout_plans');
         }
       },
     );

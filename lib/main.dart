@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:workout_tracker/core/router/app_router.dart';
+import 'package:workout_tracker/core/database/database_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,9 +15,17 @@ void main() async {
   //   options: DefaultFirebaseOptions.currentPlatform,
   // );
 
+  // Create provider container to access seeder
+  final container = ProviderContainer();
+
+  // Seed database with initial data if needed
+  final seeder = container.read(databaseSeederProvider);
+  await seeder.seedIfNeeded();
+
   runApp(
-    const ProviderScope(
-      child: WorkoutTrackerApp(),
+    UncontrolledProviderScope(
+      container: container,
+      child: const WorkoutTrackerApp(),
     ),
   );
 }
