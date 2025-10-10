@@ -112,4 +112,46 @@ class CompletedSetRepository {
                   : tbl.workoutAlternativeId.isNull())))
         .go();
   }
+
+  // Get the most recent completed set for a workout across ALL weeks (for weight inheritance)
+  // Used to find last weight used for same exercise in previous weeks
+  Future<model.CompletedSet?> getLastCompletedSetAcrossWeeks(
+    String userId,
+    String workoutName,  // e.g., "bench-press"
+    int setNumber, {
+    String? alternativeId,
+  }) async {
+    // Join with workouts table to filter by workoutName
+    final query = _database.select(_database.completedSets).join([
+      innerJoin(
+        _database.workouts,
+        _database.workouts.id.equalsExp(_database.completedSets.workoutId),
+      ),
+    ])
+      ..where(_database.completedSets.userId.equals(userId) &
+          _database.workouts.workoutName.equals(workoutName) &
+          _database.completedSets.setNumber.equals(setNumber) &
+          (alternativeId != null
+              ? _database.completedSets.workoutAlternativeId.equals(alternativeId)
+              : _database.completedSets.workoutAlternativeId.isNull()))
+      ..orderBy([OrderingTerm.desc(_database.completedSets.completedAt)])
+      ..limit(1);
+
+    final result = await query.getSingleOrNull();
+
+    if (result == null) return null;
+
+    final row = result.readTable(_database.completedSets);
+    return model.CompletedSet(
+      id: row.id,
+      userId: row.userId,
+      weekId: row.weekId,
+      workoutId: row.workoutId,
+      setNumber: row.setNumber,
+      weight: row.weight,
+      reps: row.reps,
+      completedAt: row.completedAt,
+      workoutAlternativeId: row.workoutAlternativeId,
+    );
+  }
 }

@@ -107,6 +107,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     const userId = 'temp_user_id'; // TODO: Get actual userId from auth/profile
     final currentWorkout = workouts[currentWorkoutIndex];
     final workoutId = currentWorkout['id'] as String;
+    final workoutName = currentWorkout['workoutName'] as String;
 
     // Get all completed sets for this workout in this week (filtered by alternative if selected)
     final completedSets = await repository.getCompletedSetsForWorkout(
@@ -127,7 +128,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     }
 
     setState(() {
-      // Update mock workout data with loaded progress
+      // Update workout data with loaded progress
       final sets = currentWorkout['sets'] as List;
       for (final set in sets) {
         final setNumber = set['setNumber'] as int;
@@ -137,7 +138,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
           set['actualReps'] = completedSet.reps;
           set['completed'] = true;
         } else {
-          // Reset if no progress for this alternative
+          // No progress in this week - reset
           set['actualWeight'] = null;
           set['actualReps'] = null;
           set['completed'] = false;
@@ -150,6 +151,37 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
         currentSetIndex = 0; // All completed, reset to first
       }
     });
+
+    // Load last weights from previous weeks for pre-filling uncompleted sets
+    await _loadPreviousWeekWeights(userId, workoutName);
+  }
+
+  Future<void> _loadPreviousWeekWeights(String userId, String workoutName) async {
+    final repository = ref.read(completedSetRepositoryProvider);
+    final currentWorkout = workouts[currentWorkoutIndex];
+    final sets = currentWorkout['sets'] as List;
+
+    // For each uncompleted set, try to load the last weight from previous weeks
+    for (final set in sets) {
+      if (set['completed'] == false && set['actualWeight'] == null) {
+        final setNumber = set['setNumber'] as int;
+        final lastSet = await repository.getLastCompletedSetAcrossWeeks(
+          userId,
+          workoutName,
+          setNumber,
+          alternativeId: selectedAlternativeId,
+        );
+
+        if (lastSet != null) {
+          // Progressive overload: add 5 lbs to the last completed weight
+          // This follows the rule: phase(n)week(m) = phase(n)week(m-1) + 5
+          final newWeight = lastSet.weight + 5;
+          setState(() {
+            set['actualWeight'] = newWeight;
+          });
+        }
+      }
+    }
   }
 
   @override
