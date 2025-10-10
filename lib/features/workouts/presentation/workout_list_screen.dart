@@ -108,10 +108,13 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     final currentWorkout = workouts[currentWorkoutIndex];
     final workoutId = currentWorkout['id'] as String;
 
+    // Create composite workoutId: weekId---workoutId for week-specific progress
+    final compositeWorkoutId = '${widget.weekId}---$workoutId';
+
     // Get all completed sets for this workout (filtered by alternative if selected)
     final completedSets = await repository.getCompletedSetsForWorkout(
       userId,
-      workoutId,
+      compositeWorkoutId,
       alternativeId: selectedAlternativeId,
     );
 
@@ -192,6 +195,19 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     _loadWorkoutProgress();
   }
 
+  // Update all incomplete sets after the current one with the new weight
+  void _updateIncompleteSetWeights(int currentSetIndex, double newWeight) {
+    final currentWorkout = workouts[currentWorkoutIndex];
+    final sets = currentWorkout['sets'] as List;
+
+    // Update all incomplete sets after the current one
+    for (int i = currentSetIndex + 1; i < sets.length; i++) {
+      if (sets[i]['completed'] == false) {
+        sets[i]['actualWeight'] = newWeight;
+      }
+    }
+  }
+
   Future<void> _saveSet(Map<String, dynamic> set, int setIndex) async {
     // Save to database
     final repository = ref.read(completedSetRepositoryProvider);
@@ -199,10 +215,13 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     final currentWorkout = workouts[currentWorkoutIndex];
     const uuid = Uuid();
 
+    // Create composite workoutId: weekId---workoutId for week-specific progress
+    final compositeWorkoutId = '${widget.weekId}---${currentWorkout['id']}';
+
     final completedSet = CompletedSet(
       id: uuid.v4(),
       userId: userId,
-      workoutId: currentWorkout['id'] as String,
+      workoutId: compositeWorkoutId,
       setNumber: set['setNumber'] as int,
       weight: (set['actualWeight'] as double?) ?? 0.0,
       reps: (set['actualReps'] as int?) ?? 0,
@@ -713,12 +732,15 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                                     onTap: () {
                                       final currentValue =
                                           double.tryParse(weightController.text) ??
-                                              0;
+                                              0.0;
                                       final newValue =
-                                          (currentValue - 2.5).clamp(0, 9999);
+                                          (currentValue - 2.5).clamp(0.0, 9999.0) as double;
                                       weightController.text =
                                           newValue.toStringAsFixed(1);
-                                      set['actualWeight'] = newValue;
+                                      setState(() {
+                                        set['actualWeight'] = newValue;
+                                        _updateIncompleteSetWeights(setIndex, newValue);
+                                      });
                                     },
                                     child: Container(
                                       padding: const EdgeInsets.all(4),
@@ -739,7 +761,10 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                                       final newValue = currentValue + 5;
                                       weightController.text =
                                           newValue.toStringAsFixed(1);
-                                      set['actualWeight'] = newValue;
+                                      setState(() {
+                                        set['actualWeight'] = newValue;
+                                        _updateIncompleteSetWeights(setIndex, newValue);
+                                      });
                                     },
                                     child: Container(
                                       padding: const EdgeInsets.all(4),
@@ -757,7 +782,13 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                             : null,
                       ),
                       onChanged: (value) {
-                        set['actualWeight'] = double.tryParse(value);
+                        final newWeight = double.tryParse(value);
+                        setState(() {
+                          set['actualWeight'] = newWeight;
+                          if (newWeight != null) {
+                            _updateIncompleteSetWeights(setIndex, newWeight);
+                          }
+                        });
                       },
                     ),
                   ],
