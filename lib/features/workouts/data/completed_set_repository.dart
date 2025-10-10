@@ -13,11 +13,14 @@ class CompletedSetRepository {
           CompletedSetsCompanion.insert(
             id: completedSet.id,
             userId: completedSet.userId,
+            planId: completedSet.planId,
             weekId: completedSet.weekId,
+            dayId: completedSet.dayId,
             workoutId: completedSet.workoutId,
             setNumber: completedSet.setNumber,
-            weight: completedSet.weight,
-            reps: completedSet.reps,
+            weight: Value(completedSet.weight),
+            reps: Value(completedSet.reps),
+            duration: Value(completedSet.duration),
             completedAt: completedSet.completedAt,
             workoutAlternativeId: Value(completedSet.workoutAlternativeId),
           ),
@@ -47,11 +50,14 @@ class CompletedSetRepository {
         .map((row) => model.CompletedSet(
               id: row.id,
               userId: row.userId,
+              planId: row.planId,
               weekId: row.weekId,
+              dayId: row.dayId,
               workoutId: row.workoutId,
               setNumber: row.setNumber,
               weight: row.weight,
               reps: row.reps,
+              duration: row.duration,
               completedAt: row.completedAt,
               workoutAlternativeId: row.workoutAlternativeId,
             ))
@@ -85,11 +91,14 @@ class CompletedSetRepository {
     return model.CompletedSet(
       id: result.id,
       userId: result.userId,
+      planId: result.planId,
       weekId: result.weekId,
+      dayId: result.dayId,
       workoutId: result.workoutId,
       setNumber: result.setNumber,
       weight: result.weight,
       reps: result.reps,
+      duration: result.duration,
       completedAt: result.completedAt,
       workoutAlternativeId: result.workoutAlternativeId,
     );
@@ -117,11 +126,11 @@ class CompletedSetRepository {
   // Used to find last weight used for same exercise in previous weeks
   Future<model.CompletedSet?> getLastCompletedSetAcrossWeeks(
     String userId,
-    String workoutName,  // e.g., "bench-press"
+    String globalWorkoutId,  // e.g., "bench-press"
     int setNumber, {
     String? alternativeId,
   }) async {
-    // Join with workouts table to filter by workoutName
+    // Join with workouts table to filter by globalWorkoutId
     final query = _database.select(_database.completedSets).join([
       innerJoin(
         _database.workouts,
@@ -129,7 +138,7 @@ class CompletedSetRepository {
       ),
     ])
       ..where(_database.completedSets.userId.equals(userId) &
-          _database.workouts.workoutName.equals(workoutName) &
+          _database.workouts.globalWorkoutId.equals(globalWorkoutId) &
           _database.completedSets.setNumber.equals(setNumber) &
           (alternativeId != null
               ? _database.completedSets.workoutAlternativeId.equals(alternativeId)
@@ -145,11 +154,14 @@ class CompletedSetRepository {
     return model.CompletedSet(
       id: row.id,
       userId: row.userId,
+      planId: row.planId,
       weekId: row.weekId,
+      dayId: row.dayId,
       workoutId: row.workoutId,
       setNumber: row.setNumber,
       weight: row.weight,
       reps: row.reps,
+      duration: row.duration,
       completedAt: row.completedAt,
       workoutAlternativeId: row.workoutAlternativeId,
     );
@@ -160,11 +172,11 @@ class CompletedSetRepository {
   Future<model.CompletedSet?> getCompletedSetForSpecificWeek(
     String userId,
     String weekId,
-    String workoutName,  // e.g., "bench-press"
+    String globalWorkoutId,  // e.g., "bench-press"
     int setNumber, {
     String? alternativeId,
   }) async {
-    // Join with workouts table to filter by workoutName
+    // Join with workouts table to filter by globalWorkoutId
     final query = _database.select(_database.completedSets).join([
       innerJoin(
         _database.workouts,
@@ -173,7 +185,7 @@ class CompletedSetRepository {
     ])
       ..where(_database.completedSets.userId.equals(userId) &
           _database.completedSets.weekId.equals(weekId) &
-          _database.workouts.workoutName.equals(workoutName) &
+          _database.workouts.globalWorkoutId.equals(globalWorkoutId) &
           _database.completedSets.setNumber.equals(setNumber) &
           (alternativeId != null
               ? _database.completedSets.workoutAlternativeId.equals(alternativeId)
@@ -189,11 +201,14 @@ class CompletedSetRepository {
     return model.CompletedSet(
       id: row.id,
       userId: row.userId,
+      planId: row.planId,
       weekId: row.weekId,
+      dayId: row.dayId,
       workoutId: row.workoutId,
       setNumber: row.setNumber,
       weight: row.weight,
       reps: row.reps,
+      duration: row.duration,
       completedAt: row.completedAt,
       workoutAlternativeId: row.workoutAlternativeId,
     );

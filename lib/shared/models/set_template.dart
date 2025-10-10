@@ -11,6 +11,7 @@ class SetTemplate with _$SetTemplate {
     required int setNumber,
     int? suggestedReps,
     double? suggestedWeight,
+    int? suggestedDuration,  // Duration in seconds for timer-based workouts
   }) = _SetTemplate;
 
   factory SetTemplate.fromJson(Map<String, dynamic> json) =>

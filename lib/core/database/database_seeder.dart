@@ -37,7 +37,10 @@ class DatabaseSeeder {
   }
 
   Future<void> _seedWorkoutTemplates() async {
-    // Create a single workout plan with fixed ID to match mock UI
+    // Step 1: Create global workouts library
+    await _seedGlobalWorkouts();
+
+    // Step 2: Create a single workout plan with fixed ID to match mock UI
     const planId = '1';  // Fixed ID to match WorkoutPlanListScreen mock data
     await _database.into(_database.workoutPlans).insert(
       WorkoutPlansCompanion.insert(
@@ -87,17 +90,19 @@ class DatabaseSeeder {
         final workouts = day['workouts'] as List<Map<String, dynamic>>;
         for (int i = 0; i < workouts.length; i++) {
           final workout = workouts[i];
-          // Unique workout ID per day (e.g., "week1_day_1_bench-press")
-          final workoutName = _normalizeWorkoutId(workout['name'] as String);
-          final workoutId = '${dayId}_$workoutName';
+          // Global workout ID (e.g., "bench-press")
+          final globalWorkoutId = _normalizeWorkoutId(workout['name'] as String);
+          // Unique workout instance ID per day (e.g., "week1_day_1_bench-press")
+          final workoutId = '${dayId}_$globalWorkoutId';
 
           final baseWeights = workout['baseWeights'] as List<double>;
 
           await _database.into(_database.workouts).insert(
             WorkoutsCompanion.insert(
               id: workoutId,
+              planId: planId,  // Reference to workout plan
+              globalWorkoutId: globalWorkoutId,  // Reference to global workout
               dayId: dayId,
-              workoutName: workoutName,  // Consistent across weeks (e.g., "bench-press")
               name: workout['name'] as String,
               order: i,
               notes: Value(workout['notes'] as String?),
@@ -136,6 +141,55 @@ class DatabaseSeeder {
           );
         }
       }
+    }
+  }
+
+  /// Seed global workouts library
+  Future<void> _seedGlobalWorkouts() async {
+    final globalWorkouts = [
+      // Day 1: Chest & Triceps
+      {'id': 'bench-press', 'name': 'Bench Press', 'type': 'weight'},
+      {'id': 'incline-dumbbell-press', 'name': 'Incline Dumbbell Press', 'type': 'weight'},
+      {'id': 'cable-flyes', 'name': 'Cable Flyes', 'type': 'weight'},
+      {'id': 'tricep-dips', 'name': 'Tricep Dips', 'type': 'weight'},
+      {'id': 'tricep-pushdown', 'name': 'Tricep Pushdown', 'type': 'weight'},
+
+      // Day 2: Back & Biceps
+      {'id': 'deadlift', 'name': 'Deadlift', 'type': 'weight'},
+      {'id': 'pull-ups', 'name': 'Pull-ups', 'type': 'weight'},
+      {'id': 'barbell-row', 'name': 'Barbell Row', 'type': 'weight'},
+      {'id': 'lat-pulldown', 'name': 'Lat Pulldown', 'type': 'weight'},
+      {'id': 'barbell-curl', 'name': 'Barbell Curl', 'type': 'weight'},
+      {'id': 'hammer-curl', 'name': 'Hammer Curl', 'type': 'weight'},
+
+      // Day 3: Shoulders & Traps
+      {'id': 'overhead-press', 'name': 'Overhead Press', 'type': 'weight'},
+      {'id': 'dumbbell-lateral-raise', 'name': 'Dumbbell Lateral Raise', 'type': 'weight'},
+      {'id': 'face-pulls', 'name': 'Face Pulls', 'type': 'weight'},
+      {'id': 'dumbbell-front-raise', 'name': 'Dumbbell Front Raise', 'type': 'weight'},
+      {'id': 'barbell-shrugs', 'name': 'Barbell Shrugs', 'type': 'weight'},
+
+      // Day 4: Legs
+      {'id': 'squat', 'name': 'Squat', 'type': 'weight'},
+      {'id': 'romanian-deadlift', 'name': 'Romanian Deadlift', 'type': 'weight'},
+      {'id': 'leg-press', 'name': 'Leg Press', 'type': 'weight'},
+      {'id': 'leg-curl', 'name': 'Leg Curl', 'type': 'weight'},
+      {'id': 'calf-raise', 'name': 'Calf Raise', 'type': 'weight'},
+
+      // Timer-based workouts (example)
+      {'id': 'plank', 'name': 'Plank', 'type': 'timer'},
+    ];
+
+    for (final workout in globalWorkouts) {
+      await _database.into(_database.globalWorkouts).insert(
+        GlobalWorkoutsCompanion.insert(
+          id: workout['id'] as String,
+          name: workout['name'] as String,
+          type: workout['type'] as String,
+          createdAt: DateTime.now(),
+        ),
+        mode: InsertMode.insertOrReplace,
+      );
     }
   }
 

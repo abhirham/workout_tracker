@@ -5,6 +5,8 @@ import 'package:uuid/uuid.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../shared/models/workout_alternative.dart';
 import '../../../shared/models/completed_set.dart';
+import '../../../shared/models/global_workout.dart';
+import '../data/global_workout_repository.dart';
 
 class WorkoutListScreen extends ConsumerStatefulWidget {
   final String planId;
@@ -50,11 +52,18 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
 
   int currentWorkoutIndex = 0;
   int? currentSetIndex; // Track which set is currently editable
-  int? timerSeconds; // Countdown timer
+  int? timerSeconds; // Countdown timer (for rest between sets)
   bool isTimerRunning = false;
   Timer? _timer;
   String? selectedAlternativeId; // null = original workout
   String? selectedAlternativeName; // Name of selected alternative
+
+  // Timer-based workout state
+  WorkoutType? currentWorkoutType; // Type of current workout (weight or timer)
+  int? workoutTimerSeconds; // Timer for timer-based workouts (e.g., plank duration)
+  bool isWorkoutTimerRunning = false;
+  Timer? _workoutTimer;
+  int workoutTimerElapsed = 0; // Elapsed time for timer workouts
 
   @override
   void initState() {
@@ -71,28 +80,40 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     });
 
     final repository = ref.read(workoutTemplateRepositoryProvider);
+    final globalWorkoutRepo = ref.read(globalWorkoutRepositoryProvider);
     final workoutsWithSets = await repository.getWorkoutsForDay(widget.dayId);
 
+    // Fetch global workout details to get type
+    final workoutsData = <Map<String, dynamic>>[];
+    for (final workoutWithSets in workoutsWithSets) {
+      final globalWorkout = await globalWorkoutRepo.getGlobalWorkoutById(
+        workoutWithSets.workout.globalWorkoutId,
+      );
+
+      workoutsData.add({
+        'id': workoutWithSets.workout.id,
+        'name': workoutWithSets.workout.name,
+        'globalWorkoutId': workoutWithSets.workout.globalWorkoutId,
+        'type': globalWorkout?.type ?? WorkoutType.weight,  // Default to weight if not found
+        'notes': workoutWithSets.workout.notes,
+        'timerSeconds': workoutWithSets.timerConfig?.durationSeconds ?? 45,
+        'sets': workoutWithSets.sets.map((setTemplate) {
+          return {
+            'setNumber': setTemplate.setNumber,
+            'suggestedReps': setTemplate.suggestedReps,
+            'suggestedWeight': setTemplate.suggestedWeight,
+            'suggestedDuration': setTemplate.suggestedDuration,  // For timer workouts
+            'actualReps': null,
+            'actualWeight': null,
+            'actualDuration': null,  // For timer workouts
+            'completed': false,
+          };
+        }).toList(),
+      });
+    }
+
     setState(() {
-      workouts = workoutsWithSets.map((workoutWithSets) {
-        return {
-          'id': workoutWithSets.workout.id,
-          'name': workoutWithSets.workout.name,
-          'workoutName': workoutWithSets.workout.workoutName,  // Consistent across weeks
-          'notes': workoutWithSets.workout.notes,
-          'timerSeconds': workoutWithSets.timerConfig?.durationSeconds ?? 45,
-          'sets': workoutWithSets.sets.map((setTemplate) {
-            return {
-              'setNumber': setTemplate.setNumber,
-              'suggestedReps': setTemplate.suggestedReps,
-              'suggestedWeight': setTemplate.suggestedWeight,
-              'actualReps': null,
-              'actualWeight': null,
-              'completed': false,
-            };
-          }).toList(),
-        };
-      }).toList();
+      workouts = workoutsData;
       isLoading = false;
     });
 
@@ -107,7 +128,8 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     const userId = 'temp_user_id'; // TODO: Get actual userId from auth/profile
     final currentWorkout = workouts[currentWorkoutIndex];
     final workoutId = currentWorkout['id'] as String;
-    final workoutName = currentWorkout['workoutName'] as String;
+    final globalWorkoutId = currentWorkout['globalWorkoutId'] as String;
+    final workoutType = currentWorkout['type'] as WorkoutType;
 
     // Get all completed sets for this workout in this week (filtered by alternative if selected)
     final completedSets = await repository.getCompletedSetsForWorkout(
@@ -128,19 +150,30 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     }
 
     setState(() {
+      // Set current workout type
+      currentWorkoutType = workoutType;
+
       // Update workout data with loaded progress
       final sets = currentWorkout['sets'] as List;
       for (final set in sets) {
         final setNumber = set['setNumber'] as int;
         if (latestSets.containsKey(setNumber)) {
           final completedSet = latestSets[setNumber]!;
-          set['actualWeight'] = completedSet.weight;
-          set['actualReps'] = completedSet.reps;
+          if (workoutType == WorkoutType.weight) {
+            set['actualWeight'] = completedSet.weight;
+            set['actualReps'] = completedSet.reps;
+          } else {
+            set['actualDuration'] = completedSet.duration;
+          }
           set['completed'] = true;
         } else {
           // No progress in this week - reset
-          set['actualWeight'] = null;
-          set['actualReps'] = null;
+          if (workoutType == WorkoutType.weight) {
+            set['actualWeight'] = null;
+            set['actualReps'] = null;
+          } else {
+            set['actualDuration'] = null;
+          }
           set['completed'] = false;
         }
       }
@@ -152,11 +185,13 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
       }
     });
 
-    // Load last weights from previous weeks for pre-filling uncompleted sets
-    await _loadPreviousWeekWeights(userId, workoutName);
+    // Load last weights from previous weeks for pre-filling uncompleted sets (only for weight workouts)
+    if (workoutType == WorkoutType.weight) {
+      await _loadPreviousWeekWeights(userId, globalWorkoutId);
+    }
   }
 
-  Future<void> _loadPreviousWeekWeights(String userId, String workoutName) async {
+  Future<void> _loadPreviousWeekWeights(String userId, String globalWorkoutId) async {
     final repository = ref.read(completedSetRepositoryProvider);
     final currentWorkout = workouts[currentWorkoutIndex];
     final sets = currentWorkout['sets'] as List;
@@ -180,7 +215,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
           referenceSet = await repository.getCompletedSetForSpecificWeek(
             userId,
             previousPhaseWeek1Id,
-            workoutName,
+            globalWorkoutId,
             setNumber,
             alternativeId: selectedAlternativeId,
           );
@@ -188,7 +223,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
           // Within phase: use most recent completed set (previous week)
           referenceSet = await repository.getLastCompletedSetAcrossWeeks(
             userId,
-            workoutName,
+            globalWorkoutId,
             setNumber,
             alternativeId: selectedAlternativeId,
           );
@@ -199,7 +234,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
           // This follows the rules:
           // - phase(n+1)week(1) = phase(n)week(1) + 5
           // - phase(n)week(m) = phase(n)week(m-1) + 5 (where m > 1)
-          final newWeight = referenceSet.weight + 5;
+          final newWeight = (referenceSet.weight ?? 0) + 5;
           setState(() {
             set['actualWeight'] = newWeight;
           });
@@ -211,6 +246,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _workoutTimer?.cancel();
     super.dispose();
   }
 
@@ -238,6 +274,44 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
         }
       });
     });
+  }
+
+  void _startWorkoutTimer(int durationSeconds) {
+    setState(() {
+      workoutTimerSeconds = durationSeconds;
+      isWorkoutTimerRunning = true;
+      workoutTimerElapsed = 0;
+    });
+
+    _workoutTimer?.cancel();
+    _workoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        if (workoutTimerSeconds! > 0) {
+          workoutTimerSeconds = workoutTimerSeconds! - 1;
+          workoutTimerElapsed++;
+        } else {
+          timer.cancel();
+          isWorkoutTimerRunning = false;
+          // Auto-save the set with elapsed time
+          final currentWorkout = workouts[currentWorkoutIndex];
+          final sets = currentWorkout['sets'] as List;
+          if (currentSetIndex != null && currentSetIndex! < sets.length) {
+            final set = sets[currentSetIndex!];
+            set['actualDuration'] = workoutTimerElapsed;
+            _saveSet(set, currentSetIndex!);
+          }
+        }
+      });
+    });
+  }
+
+  int _stopWorkoutTimer() {
+    _workoutTimer?.cancel();
+    final elapsed = workoutTimerElapsed;
+    setState(() {
+      isWorkoutTimerRunning = false;
+    });
+    return elapsed;
   }
 
   void _resetWorkoutState() {
@@ -269,27 +343,54 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     final currentWorkout = workouts[currentWorkoutIndex];
     const uuid = Uuid();
 
-    final completedSet = CompletedSet(
-      id: uuid.v4(),
-      userId: userId,
-      weekId: widget.weekId,
-      workoutId: currentWorkout['id'] as String,
-      setNumber: set['setNumber'] as int,
-      weight: (set['actualWeight'] as double?) ?? 0.0,
-      reps: (set['actualReps'] as int?) ?? 0,
-      workoutAlternativeId: selectedAlternativeId, // null if original workout
-      completedAt: DateTime.now(),
-    );
+    // Handle timer vs weight workouts
+    final CompletedSet completedSet;
+    if (currentWorkoutType == WorkoutType.timer) {
+      completedSet = CompletedSet(
+        id: uuid.v4(),
+        userId: userId,
+        planId: widget.planId,
+        weekId: widget.weekId,
+        dayId: widget.dayId,
+        workoutId: currentWorkout['id'] as String,
+        setNumber: set['setNumber'] as int,
+        weight: null,
+        reps: null,
+        duration: set['actualDuration'] as int?,
+        workoutAlternativeId: selectedAlternativeId, // null if original workout
+        completedAt: DateTime.now(),
+      );
+    } else {
+      completedSet = CompletedSet(
+        id: uuid.v4(),
+        userId: userId,
+        planId: widget.planId,
+        weekId: widget.weekId,
+        dayId: widget.dayId,
+        workoutId: currentWorkout['id'] as String,
+        setNumber: set['setNumber'] as int,
+        weight: set['actualWeight'] as double?,
+        reps: set['actualReps'] as int?,
+        duration: null,
+        workoutAlternativeId: selectedAlternativeId, // null if original workout
+        completedAt: DateTime.now(),
+      );
+    }
 
     await repository.saveCompletedSet(completedSet);
 
     setState(() {
       set['completed'] = true;
 
-      // Only start timer if not the last set
+      // Only start rest timer if not the last set (and only for weight workouts)
       final sets = currentWorkout['sets'] as List;
       if (setIndex < sets.length - 1) {
-        _startTimer();
+        if (currentWorkoutType == WorkoutType.weight) {
+          _startTimer(); // Rest timer for weight workouts
+        } else {
+          // For timer workouts, just move to next set
+          currentSetIndex = setIndex + 1;
+        }
       } else {
         // Last set - move to next set index without timer
         currentSetIndex = setIndex + 1;
@@ -300,7 +401,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   Future<void> _showAlternativesModal() async {
     final currentWorkout = workouts[currentWorkoutIndex];
     final originalWorkoutName = currentWorkout['name'] as String;
-    final workoutName = currentWorkout['workoutName'] as String;
+    final globalWorkoutId = currentWorkout['globalWorkoutId'] as String;
 
     // Load alternatives from repository
     final repository = ref.read(workoutAlternativeRepositoryProvider);
@@ -309,7 +410,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
 
     final alternatives = await repository.getAlternativesForWorkout(
       userId,
-      workoutName,
+      globalWorkoutId,
     );
 
     if (!mounted) return;
@@ -318,7 +419,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     showModalBottomSheet(
       context: context,
       builder: (context) => _AlternativesBottomSheet(
-        workoutName: workoutName,
+        workoutName: globalWorkoutId,
         originalWorkoutName: originalWorkoutName,
         selectedAlternativeId: selectedAlternativeId,
         alternatives: alternatives,
@@ -337,7 +438,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
           final newAlternative = WorkoutAlternative(
             id: uuid.v4(),
             userId: userId,
-            workoutName: workoutName,
+            globalWorkoutId: globalWorkoutId,
             name: name,
             createdAt: DateTime.now(),
           );
@@ -744,207 +845,315 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
               ),
               const SizedBox(width: 16),
 
-              // Weight input
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Weight (lbs)',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withOpacity(0.6),
+              // Conditional UI based on workout type
+              if (currentWorkoutType == WorkoutType.timer) ...[
+                // Timer workout UI
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Duration',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withOpacity(0.6),
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.outline,
                           ),
-                    ),
-                    const SizedBox(height: 4),
-                    TextField(
-                      controller: weightController,
-                      enabled: isEnabled,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        contentPadding: const EdgeInsets.only(
-                          left: 12,
-                          right: 60,
-                          top: 8,
-                          bottom: 8,
-                        ),
-                        border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        hintText: set['suggestedWeight']?.toString(),
-                        suffixIcon: isEnabled
-                            ? Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  InkWell(
-                                    onTap: () {
-                                      final currentValue =
-                                          double.tryParse(weightController.text) ??
-                                              0.0;
-                                      final newValue =
-                                          (currentValue - 2.5).clamp(0.0, 9999.0);
-                                      weightController.text =
-                                          newValue.toStringAsFixed(1);
-                                      setState(() {
-                                        set['actualWeight'] = newValue;
-                                        _updateIncompleteSetWeights(setIndex, newValue);
-                                      });
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      child: Icon(
-                                        Icons.remove,
-                                        size: 16,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface,
-                                      ),
-                                    ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.timer,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              isWorkoutTimerRunning && isCurrentSet
+                                  ? '${workoutTimerSeconds}s'
+                                  : isCompleted
+                                      ? '${set['actualDuration'] ?? set['suggestedDuration']}s'
+                                      : 'Target: ${set['suggestedDuration']}s',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: isWorkoutTimerRunning && isCurrentSet
+                                        ? Theme.of(context).colorScheme.primary
+                                        : null,
                                   ),
-                                  InkWell(
-                                    onTap: () {
-                                      final currentValue =
-                                          double.tryParse(weightController.text) ??
-                                              0;
-                                      final newValue = currentValue + 5;
-                                      weightController.text =
-                                          newValue.toStringAsFixed(1);
-                                      setState(() {
-                                        set['actualWeight'] = newValue;
-                                        _updateIncompleteSetWeights(setIndex, newValue);
-                                      });
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      child: Icon(
-                                        Icons.add,
-                                        size: 16,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : null,
+                            ),
+                          ],
+                        ),
                       ),
-                      onChanged: (value) {
-                        final newWeight = double.tryParse(value);
-                        setState(() {
-                          set['actualWeight'] = newWeight;
-                          if (newWeight != null) {
-                            _updateIncompleteSetWeights(setIndex, newWeight);
-                          }
-                        });
-                      },
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-
-              // Reps input (actual reps completed, target shown above)
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Reps (Target: ${targetReps ?? '?'})',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withOpacity(0.6),
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    TextField(
-                      controller: repsController,
-                      enabled: isEnabled,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        isDense: true,
-                        contentPadding: const EdgeInsets.only(
-                          left: 12,
-                          right: 60,
-                          top: 8,
-                          bottom: 8,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        hintText: targetReps?.toString(),
-                        suffixIcon: isEnabled
-                            ? Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  InkWell(
-                                    onTap: () {
-                                      final currentValue =
-                                          int.tryParse(repsController.text) ?? 0;
-                                      final newValue =
-                                          (currentValue - 1).clamp(0, 9999);
-                                      repsController.text = newValue.toString();
-                                      set['actualReps'] = newValue;
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      child: Icon(
-                                        Icons.remove,
-                                        size: 16,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                  InkWell(
-                                    onTap: () {
-                                      final currentValue =
-                                          int.tryParse(repsController.text) ?? 0;
-                                      final newValue = currentValue + 1;
-                                      repsController.text = newValue.toString();
-                                      set['actualReps'] = newValue;
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      child: Icon(
-                                        Icons.add,
-                                        size: 16,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : null,
+              ] else ...[
+                // Weight workout UI
+                // Weight input
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Weight (lbs)',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withOpacity(0.6),
+                            ),
                       ),
-                      onChanged: (value) {
-                        set['actualReps'] = int.tryParse(value);
-                      },
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      TextField(
+                        controller: weightController,
+                        enabled: isEnabled,
+                        keyboardType:
+                            const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.only(
+                            left: 12,
+                            right: 60,
+                            top: 8,
+                            bottom: 8,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          hintText: set['suggestedWeight']?.toString(),
+                          suffixIcon: isEnabled
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    InkWell(
+                                      onTap: () {
+                                        final currentValue =
+                                            double.tryParse(weightController.text) ??
+                                                0.0;
+                                        final newValue =
+                                            (currentValue - 2.5).clamp(0.0, 9999.0);
+                                        weightController.text =
+                                            newValue.toStringAsFixed(1);
+                                        setState(() {
+                                          set['actualWeight'] = newValue;
+                                          _updateIncompleteSetWeights(setIndex, newValue);
+                                        });
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        child: Icon(
+                                          Icons.remove,
+                                          size: 16,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                    InkWell(
+                                      onTap: () {
+                                        final currentValue =
+                                            double.tryParse(weightController.text) ??
+                                                0;
+                                        final newValue = currentValue + 5;
+                                        weightController.text =
+                                            newValue.toStringAsFixed(1);
+                                        setState(() {
+                                          set['actualWeight'] = newValue;
+                                          _updateIncompleteSetWeights(setIndex, newValue);
+                                        });
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        child: Icon(
+                                          Icons.add,
+                                          size: 16,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : null,
+                        ),
+                        onChanged: (value) {
+                          final newWeight = double.tryParse(value);
+                          setState(() {
+                            set['actualWeight'] = newWeight;
+                            if (newWeight != null) {
+                              _updateIncompleteSetWeights(setIndex, newWeight);
+                            }
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Reps input (actual reps completed, target shown above)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Reps (Target: ${targetReps ?? '?'})',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withOpacity(0.6),
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      TextField(
+                        controller: repsController,
+                        enabled: isEnabled,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.only(
+                            left: 12,
+                            right: 60,
+                            top: 8,
+                            bottom: 8,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          hintText: targetReps?.toString(),
+                          suffixIcon: isEnabled
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    InkWell(
+                                      onTap: () {
+                                        final currentValue =
+                                            int.tryParse(repsController.text) ?? 0;
+                                        final newValue =
+                                            (currentValue - 1).clamp(0, 9999);
+                                        repsController.text = newValue.toString();
+                                        set['actualReps'] = newValue;
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        child: Icon(
+                                          Icons.remove,
+                                          size: 16,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                    InkWell(
+                                      onTap: () {
+                                        final currentValue =
+                                            int.tryParse(repsController.text) ?? 0;
+                                        final newValue = currentValue + 1;
+                                        repsController.text = newValue.toString();
+                                        set['actualReps'] = newValue;
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        child: Icon(
+                                          Icons.add,
+                                          size: 16,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : null,
+                        ),
+                        onChanged: (value) {
+                          set['actualReps'] = int.tryParse(value);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+          // Button row for current set
+          if (isCurrentSet) ...[
+            const SizedBox(height: 12),
+            if (currentWorkoutType == WorkoutType.timer) ...[
+              // Timer workout buttons
+              if (!isCompleted && !isWorkoutTimerRunning)
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: isEnabled
+                        ? () {
+                            final duration = set['suggestedDuration'] as int?;
+                            if (duration != null) {
+                              _startWorkoutTimer(duration);
+                            }
+                          }
+                        : null,
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Start Timer'),
+                  ),
+                )
+              else if (isWorkoutTimerRunning)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      final elapsed = _stopWorkoutTimer();
+                      setState(() {
+                        set['actualDuration'] = elapsed;
+                      });
+                      _saveSet(set, setIndex);
+                    },
+                    icon: const Icon(Icons.stop),
+                    label: const Text('Stop & Save'),
+                  ),
+                )
+              else if (isCompleted)
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: isEnabled
+                        ? () {
+                            final duration = set['suggestedDuration'] as int?;
+                            if (duration != null) {
+                              _startWorkoutTimer(duration);
+                            }
+                          }
+                        : null,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Redo Timer'),
+                  ),
+                ),
+            ] else ...[
+              // Weight workout save button
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: isEnabled ? () => _saveSet(set, setIndex) : null,
+                  child: const Text('Save'),
                 ),
               ),
             ],
-          ),
-          // Save button in new row (show for current set, even if already completed for re-editing)
-          if (isCurrentSet) ...[
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: isEnabled ? () => _saveSet(set, setIndex) : null,
-                child: const Text('Save'),
-              ),
-            ),
           ],
         ],
         ),

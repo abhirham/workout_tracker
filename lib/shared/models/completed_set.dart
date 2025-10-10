@@ -8,11 +8,14 @@ class CompletedSet with _$CompletedSet {
   const factory CompletedSet({
     required String id,
     required String userId,
+    required String planId,  // Part of composite key for tracking progress
     required String weekId,  // Part of composite key for tracking progress
-    required String workoutId,  // References Workouts.id (consistent across weeks)
+    required String dayId,  // Part of composite key for tracking progress
+    required String workoutId,  // References Workouts.id - Part of composite key
     required int setNumber,
-    required double weight,
-    required int reps,
+    double? weight,  // Nullable for timer-based workouts
+    int? reps,  // Nullable for timer-based workouts
+    int? duration,  // Duration in seconds for timer-based workouts
     required DateTime completedAt,
     String? workoutAlternativeId,
   }) = _CompletedSet;

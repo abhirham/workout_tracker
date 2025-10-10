@@ -7,6 +7,8 @@ part 'workout.g.dart';
 class Workout with _$Workout {
   const factory Workout({
     required String id,
+    required String planId,
+    required String globalWorkoutId,
     required String dayId,
     required String name,
     required int order,

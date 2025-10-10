@@ -7,6 +7,17 @@ import 'package:path/path.dart' as p;
 
 part 'app_database.g.dart';
 
+// Global Workouts Library
+class GlobalWorkouts extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get type => text()();  // 'weight' or 'timer'
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 // Shared Template Tables
 class WorkoutPlans extends Table {
   TextColumn get id => text()();
@@ -39,9 +50,10 @@ class Days extends Table {
 }
 
 class Workouts extends Table {
-  TextColumn get id => text()();  // Composite ID: dayId + workoutName (e.g., "week1_day_1_bench-press")
+  TextColumn get id => text()();  // Primary key for this workout instance
+  TextColumn get planId => text().references(WorkoutPlans, #id)();  // Reference to workout plan
+  TextColumn get globalWorkoutId => text().references(GlobalWorkouts, #id)();  // Reference to global workout
   TextColumn get dayId => text().references(Days, #id)();
-  TextColumn get workoutName => text()();  // Base workout name (e.g., "bench-press") - consistent across weeks
   TextColumn get name => text()();  // Display name (e.g., "Bench Press")
   IntColumn get order => integer()();
   TextColumn get notes => text().nullable()();
@@ -57,6 +69,7 @@ class SetTemplates extends Table {
   IntColumn get setNumber => integer()();
   IntColumn get suggestedReps => integer().nullable()();
   RealColumn get suggestedWeight => real().nullable()();
+  IntColumn get suggestedDuration => integer().nullable()();  // Duration in seconds for timer-based workouts
 
   @override
   Set<Column> get primaryKey => {id};
@@ -85,11 +98,14 @@ class UserProfiles extends Table {
 class CompletedSets extends Table {
   TextColumn get id => text()();
   TextColumn get userId => text()();
+  TextColumn get planId => text()();  // Part of composite key
   TextColumn get weekId => text()();  // Part of composite key
-  TextColumn get workoutId => text()();  // References Workouts.id
+  TextColumn get dayId => text()();  // Part of composite key
+  TextColumn get workoutId => text()();  // References Workouts.id - Part of composite key
   IntColumn get setNumber => integer()();
-  RealColumn get weight => real()();
-  IntColumn get reps => integer()();
+  RealColumn get weight => real().nullable()();  // Nullable for timer-based workouts
+  IntColumn get reps => integer().nullable()();  // Nullable for timer-based workouts
+  IntColumn get duration => integer().nullable()();  // Duration in seconds for timer-based workouts
   DateTimeColumn get completedAt => dateTime()();
   TextColumn get workoutAlternativeId => text().nullable()();
 
@@ -112,7 +128,7 @@ class WorkoutProgressTable extends Table {
 class WorkoutAlternatives extends Table {
   TextColumn get id => text()();
   TextColumn get userId => text()();
-  TextColumn get workoutName => text()();  // Links to Workouts.workoutName (e.g., "bench-press") - consistent across weeks
+  TextColumn get globalWorkoutId => text().references(GlobalWorkouts, #id)();  // Links to global workout
   TextColumn get name => text()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -135,6 +151,7 @@ class SyncQueue extends Table {
 }
 
 @DriftDatabase(tables: [
+  GlobalWorkouts,
   WorkoutPlans,
   Weeks,
   Days,
@@ -151,7 +168,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration {
@@ -233,6 +250,35 @@ class AppDatabase extends _$AppDatabase {
           await customStatement('DROP TABLE IF EXISTS workout_plans');
 
           // Recreate all tables with new schema
+          await m.createTable(workoutPlans);
+          await m.createTable(weeks);
+          await m.createTable(days);
+          await m.createTable(workouts);
+          await m.createTable(setTemplates);
+          await m.createTable(timerConfigs);
+          await m.createTable(completedSets);
+          await m.createTable(workoutProgressTable);
+          await m.createTable(workoutAlternatives);
+        }
+        if (from < 7) {
+          // Major schema change: introduce global workouts, update workouts table structure
+          // Add timer-based workouts support, update composite keys
+
+          // Drop and recreate all tables with new schema
+          await customStatement('DROP TABLE IF EXISTS set_templates');
+          await customStatement('DROP TABLE IF EXISTS timer_configs');
+          await customStatement('DROP TABLE IF EXISTS completed_sets');
+          await customStatement('DROP TABLE IF EXISTS workout_progress');
+          await customStatement('DROP TABLE IF EXISTS workout_alternatives');
+          await customStatement('DROP TABLE IF EXISTS workouts');
+          await customStatement('DROP TABLE IF EXISTS days');
+          await customStatement('DROP TABLE IF EXISTS weeks');
+          await customStatement('DROP TABLE IF EXISTS workout_plans');
+
+          // Create new global_workouts table
+          await m.createTable(globalWorkouts);
+
+          // Recreate all tables with updated schema
           await m.createTable(workoutPlans);
           await m.createTable(weeks);
           await m.createTable(days);
