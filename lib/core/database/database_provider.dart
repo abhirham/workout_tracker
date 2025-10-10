@@ -4,6 +4,8 @@ import 'database_seeder.dart';
 import '../../features/workouts/data/workout_alternative_repository.dart';
 import '../../features/workouts/data/completed_set_repository.dart';
 import '../../features/workouts/data/workout_template_repository.dart';
+import '../../features/days/data/day_repository.dart';
+import '../../features/weeks/data/week_repository.dart';
 
 final databaseProvider = Provider<AppDatabase>((ref) {
   final database = AppDatabase();
@@ -31,4 +33,14 @@ final workoutTemplateRepositoryProvider = Provider<WorkoutTemplateRepository>((r
 final databaseSeederProvider = Provider<DatabaseSeeder>((ref) {
   final database = ref.watch(databaseProvider);
   return DatabaseSeeder(database);
+});
+
+final dayRepositoryProvider = Provider<DayRepository>((ref) {
+  final database = ref.watch(databaseProvider);
+  return DayRepository(database);
+});
+
+final weekRepositoryProvider = Provider<WeekRepository>((ref) {
+  final database = ref.watch(databaseProvider);
+  return WeekRepository(database);
 });

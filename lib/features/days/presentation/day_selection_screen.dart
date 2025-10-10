@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:workout_tracker/core/database/app_database.dart';
+import 'package:workout_tracker/core/database/database_provider.dart';
 
-class DaySelectionScreen extends ConsumerWidget {
+class DaySelectionScreen extends ConsumerStatefulWidget {
   final String planId;
   final String weekId;
   final String weekName;
@@ -14,84 +16,87 @@ class DaySelectionScreen extends ConsumerWidget {
     required this.weekName,
   });
 
+  @override
+  ConsumerState<DaySelectionScreen> createState() => _DaySelectionScreenState();
+}
+
+class _DaySelectionScreenState extends ConsumerState<DaySelectionScreen> {
+  List<Day> days = [];
+  Map<String, int> workoutCounts = {};
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadDays();
+    });
+  }
+
   int get weekNumber {
     // Extract week number from weekId (format: 'week_1', 'week_2', etc.)
-    final match = RegExp(r'week_(\d+)').firstMatch(weekId);
+    final match = RegExp(r'week_(\d+)').firstMatch(widget.weekId);
     return match != null ? int.parse(match.group(1)!) : 1;
   }
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // TODO: Replace with actual data from repository
-    final mockDays = [
-      {
-        'id': 'day_1',
-        'dayNumber': 1,
-        'name': 'Push Day',
-        'workoutCount': 5,
-        'completed': false
-      },
-      {
-        'id': 'day_2',
-        'dayNumber': 2,
-        'name': 'Pull Day',
-        'workoutCount': 6,
-        'completed': false
-      },
-      {
-        'id': 'day_3',
-        'dayNumber': 3,
-        'name': 'Leg Day',
-        'workoutCount': 4,
-        'completed': false
-      },
-      {
-        'id': 'day_4',
-        'dayNumber': 4,
-        'name': 'Upper Body',
-        'workoutCount': 7,
-        'completed': false
-      },
-      {
-        'id': 'day_5',
-        'dayNumber': 5,
-        'name': 'Lower Body',
-        'workoutCount': 5,
-        'completed': false
-      },
-      {
-        'id': 'day_6',
-        'dayNumber': 6,
-        'name': 'Full Body',
-        'workoutCount': 8,
-        'completed': false
-      },
-    ];
+  Future<void> _loadDays() async {
+    setState(() {
+      isLoading = true;
+    });
 
+    final repository = ref.read(dayRepositoryProvider);
+    final loadedDays = await repository.getDaysForWeek(widget.weekId);
+
+    // Load workout counts for each day
+    final counts = <String, int>{};
+    for (final day in loadedDays) {
+      counts[day.id] = await repository.getWorkoutCountForDay(day.id);
+    }
+
+    setState(() {
+      days = loadedDays;
+      workoutCounts = counts;
+      isLoading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(weekName),
+        title: Text(widget.weekName),
         centerTitle: true,
       ),
-      body: GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 0.9,
-        ),
-        itemCount: mockDays.length,
-        itemBuilder: (context, index) {
-          final day = mockDays[index];
-          return _buildDayCard(context, day);
-        },
-      ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : days.isEmpty
+              ? Center(
+                  child: Text(
+                    'No days found for this week',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                )
+              : GridView.builder(
+                  padding: const EdgeInsets.all(16),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 0.9,
+                  ),
+                  itemCount: days.length,
+                  itemBuilder: (context, index) {
+                    final day = days[index];
+                    return _buildDayCard(context, day);
+                  },
+                ),
     );
   }
 
-  Widget _buildDayCard(BuildContext context, Map<String, dynamic> day) {
-    final isCompleted = day['completed'] as bool;
+  Widget _buildDayCard(BuildContext context, Day day) {
+    // TODO: Check if day is completed (requires progress tracking)
+    final isCompleted = false;
+    final workoutCount = workoutCounts[day.id] ?? 0;
 
     return Card(
       child: InkWell(
@@ -99,12 +104,12 @@ class DaySelectionScreen extends ConsumerWidget {
           context.pushNamed(
             'workouts',
             pathParameters: {
-              'planId': planId,
-              'weekId': weekId,
-              'dayId': day['id'] as String,
+              'planId': widget.planId,
+              'weekId': widget.weekId,
+              'dayId': day.id,
             },
             queryParameters: {
-              'dayName': day['name'] as String,
+              'dayName': day.name,
               'weekNumber': weekNumber.toString(),
             },
           );
@@ -148,7 +153,7 @@ class DaySelectionScreen extends ConsumerWidget {
                 ),
                 child: Center(
                   child: Text(
-                    '${day['dayNumber']}',
+                    '${day.dayNumber}',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           color: isCompleted
                               ? Theme.of(context)
@@ -164,7 +169,7 @@ class DaySelectionScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                day['name'] as String,
+                day.name,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -174,7 +179,7 @@ class DaySelectionScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                '${day['workoutCount']} exercises',
+                '$workoutCount exercises',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context)
                           .colorScheme

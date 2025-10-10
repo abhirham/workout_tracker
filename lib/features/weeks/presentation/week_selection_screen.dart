@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:workout_tracker/core/database/app_database.dart';
+import 'package:workout_tracker/core/database/database_provider.dart';
 
-class WeekSelectionScreen extends ConsumerWidget {
+class WeekSelectionScreen extends ConsumerStatefulWidget {
   final String planId;
   final String planName;
 
@@ -13,38 +15,74 @@ class WeekSelectionScreen extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // TODO: Replace with actual data from repository
-    final mockWeeks = List.generate(
-      12,
-      (index) => {
-        'id': 'week_${index + 1}',
-        'weekNumber': index + 1,
-        'name': 'Week ${index + 1}',
-        'daysCompleted': 0, // Fresh start - no progress
-        'totalDays': 6,
-      },
-    );
+  ConsumerState<WeekSelectionScreen> createState() => _WeekSelectionScreenState();
+}
 
+class _WeekSelectionScreenState extends ConsumerState<WeekSelectionScreen> {
+  List<Week> weeks = [];
+  Map<String, int> dayCounts = {};
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadWeeks();
+    });
+  }
+
+  Future<void> _loadWeeks() async {
+    setState(() {
+      isLoading = true;
+    });
+
+    final repository = ref.read(weekRepositoryProvider);
+    final loadedWeeks = await repository.getWeeksForPlan(widget.planId);
+
+    // Load day counts for each week
+    final counts = <String, int>{};
+    for (final week in loadedWeeks) {
+      counts[week.id] = await repository.getDayCountForWeek(week.id);
+    }
+
+    setState(() {
+      weeks = loadedWeeks;
+      dayCounts = counts;
+      isLoading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(planName),
+        title: Text(widget.planName),
         centerTitle: true,
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: mockWeeks.length,
-        itemBuilder: (context, index) {
-          final week = mockWeeks[index];
-          return _buildWeekCard(context, week);
-        },
-      ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : weeks.isEmpty
+              ? Center(
+                  child: Text(
+                    'No weeks found for this plan',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: weeks.length,
+                  itemBuilder: (context, index) {
+                    final week = weeks[index];
+                    return _buildWeekCard(context, week);
+                  },
+                ),
     );
   }
 
-  Widget _buildWeekCard(BuildContext context, Map<String, dynamic> week) {
-    final daysCompleted = week['daysCompleted'] as int;
-    final totalDays = week['totalDays'] as int;
+  Widget _buildWeekCard(BuildContext context, Week week) {
+    // TODO: Track completed days (requires progress tracking)
+    final daysCompleted = 0;
+    final totalDays = dayCounts[week.id] ?? 0;
     final progress = totalDays > 0 ? daysCompleted / totalDays : 0.0;
 
     return Card(
@@ -54,10 +92,10 @@ class WeekSelectionScreen extends ConsumerWidget {
           context.pushNamed(
             'days',
             pathParameters: {
-              'planId': planId,
-              'weekId': week['id'] as String,
+              'planId': widget.planId,
+              'weekId': week.id,
             },
-            queryParameters: {'weekName': week['name'] as String},
+            queryParameters: {'weekName': week.name},
           );
         },
         borderRadius: BorderRadius.circular(12),
@@ -74,7 +112,7 @@ class WeekSelectionScreen extends ConsumerWidget {
                 ),
                 child: Center(
                   child: Text(
-                    'W${week['weekNumber']}',
+                    'W${week.weekNumber}',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           color: Theme.of(context)
                               .colorScheme
@@ -90,7 +128,7 @@ class WeekSelectionScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      week['name'] as String,
+                      week.name,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w600,
                           ),

@@ -34,8 +34,8 @@ class DatabaseSeeder {
       ),
     );
 
-    // Create 12 weeks (3 months program)
-    for (int weekNum = 1; weekNum <= 12; weekNum++) {
+    // Create 8 weeks (2 phases of 4 weeks each)
+    for (int weekNum = 1; weekNum <= 8; weekNum++) {
       final weekId = uuid.v4();
       await _database.into(_database.weeks).insert(
         WeeksCompanion.insert(
@@ -48,14 +48,14 @@ class DatabaseSeeder {
 
       // Create 4 training days per week
       final days = [
-        {'num': 1, 'name': 'Upper Push', 'workouts': _getUpperPushWorkouts(weekNum)},
-        {'num': 2, 'name': 'Lower Body', 'workouts': _getLowerBodyWorkouts(weekNum)},
-        {'num': 3, 'name': 'Back & Pull', 'workouts': _getBackPullWorkouts(weekNum)},
-        {'num': 4, 'name': 'Arms', 'workouts': _getArmsWorkouts(weekNum)},
+        {'num': 1, 'name': 'Chest & Triceps', 'workouts': _getDay1Workouts()},
+        {'num': 2, 'name': 'Back & Biceps', 'workouts': _getDay2Workouts()},
+        {'num': 3, 'name': 'Shoulders & Traps', 'workouts': _getDay3Workouts()},
+        {'num': 4, 'name': 'Legs', 'workouts': _getDay4Workouts()},
       ];
 
       for (final day in days) {
-        // Create unique day ID per week: week1_day1, week2_day1, etc.
+        // Create unique day ID per week: week1_day_1, week2_day_1, etc.
         final dayId = 'week${weekNum}_day_${day['num']}';
         await _database.into(_database.days).insert(
           DaysCompanion.insert(
@@ -73,6 +73,8 @@ class DatabaseSeeder {
           final workout = workouts[i];
           final workoutId = '${dayId}_workout_${i + 1}';
 
+          final baseWeights = workout['baseWeights'] as List<double>;
+
           await _database.into(_database.workouts).insert(
             WorkoutsCompanion.insert(
               id: workoutId,
@@ -80,21 +82,22 @@ class DatabaseSeeder {
               name: workout['name'] as String,
               order: i,
               notes: Value(workout['notes'] as String?),
-              defaultSets: (workout['weights'] as List).length,
+              defaultSets: baseWeights.length,
             ),
             mode: InsertMode.insertOrReplace,
           );
 
-          // Add set templates
-          final weights = workout['weights'] as List<double>;
-          for (int setNum = 0; setNum < weights.length; setNum++) {
+          // Add set templates with week-specific rep targets and calculated weights
+          for (int setNum = 0; setNum < baseWeights.length; setNum++) {
+            final calculatedWeight = _calculateWeight(baseWeights[setNum], weekNum);
+
             await _database.into(_database.setTemplates).insert(
               SetTemplatesCompanion.insert(
                 id: '${workoutId}_set_${setNum + 1}',
                 workoutId: workoutId,
                 setNumber: setNum + 1,
                 suggestedReps: Value(_getTargetReps(weekNum)),
-                suggestedWeight: Value(weights[setNum]),
+                suggestedWeight: Value(calculatedWeight),
               ),
               mode: InsertMode.insertOrReplace,
             );
@@ -132,35 +135,61 @@ class DatabaseSeeder {
     }
   }
 
-  List<Map<String, dynamic>> _getUpperPushWorkouts(int weekNum) {
+  /// Calculate weight based on base weight, week number, and phase progression
+  /// Formula: phase(n+1)week(1) = phase(n)week(1)+5, phase(n)week(m) = phase(n)week(m-1)+5
+  double _calculateWeight(double baseWeight, int weekNumber) {
+    // Phase: 0 or 1 for 8 weeks (every 4 weeks = 1 phase)
+    final phase = (weekNumber - 1) ~/ 4;
+    // Week within current phase: 0, 1, 2, or 3
+    final weekInPhase = (weekNumber - 1) % 4;
+
+    // Add 5kg per phase and 5kg per week within the phase
+    return baseWeight + (phase * 5) + (weekInPhase * 5);
+  }
+
+  // Day 1: Chest & Triceps
+  List<Map<String, dynamic>> _getDay1Workouts() {
     return [
-      {'name': 'Bench Press', 'notes': 'Focus on slow eccentric', 'weights': [135.0, 155.0, 175.0]},
-      {'name': 'Overhead Press', 'notes': null, 'weights': [75.0, 85.0, 95.0]},
-      {'name': 'Incline Dumbbell Press', 'notes': '30 degree angle', 'weights': [60.0, 70.0]},
+      {'name': 'Bench Press', 'notes': 'Focus on controlled eccentric', 'baseWeights': [60.0, 70.0, 80.0, 90.0]},
+      {'name': 'Incline Dumbbell Press', 'notes': '30-45 degree angle', 'baseWeights': [40.0, 50.0, 60.0]},
+      {'name': 'Cable Flyes', 'notes': 'Squeeze at center', 'baseWeights': [30.0, 40.0, 50.0]},
+      {'name': 'Tricep Dips', 'notes': 'Lean forward for chest emphasis', 'baseWeights': [0.0, 15.0, 25.0]},
+      {'name': 'Tricep Pushdown', 'notes': 'Keep elbows stationary', 'baseWeights': [40.0, 50.0, 60.0]},
     ];
   }
 
-  List<Map<String, dynamic>> _getLowerBodyWorkouts(int weekNum) {
+  // Day 2: Back & Biceps
+  List<Map<String, dynamic>> _getDay2Workouts() {
     return [
-      {'name': 'Squat', 'notes': 'Full depth', 'weights': [185.0, 205.0, 225.0]},
-      {'name': 'Romanian Deadlift', 'notes': 'Keep back straight', 'weights': [135.0, 155.0, 175.0]},
-      {'name': 'Leg Press', 'notes': null, 'weights': [270.0, 315.0, 360.0]},
+      {'name': 'Deadlift', 'notes': 'Keep back neutral', 'baseWeights': [80.0, 100.0, 120.0, 130.0]},
+      {'name': 'Pull-ups', 'notes': 'Full range of motion', 'baseWeights': [0.0, 10.0, 20.0]},
+      {'name': 'Barbell Row', 'notes': 'Pull to lower chest', 'baseWeights': [60.0, 70.0, 80.0]},
+      {'name': 'Lat Pulldown', 'notes': 'Wide grip', 'baseWeights': [50.0, 60.0, 70.0]},
+      {'name': 'Barbell Curl', 'notes': 'No swinging', 'baseWeights': [30.0, 35.0, 40.0]},
+      {'name': 'Hammer Curl', 'notes': 'Alternating arms', 'baseWeights': [20.0, 25.0, 30.0]},
     ];
   }
 
-  List<Map<String, dynamic>> _getBackPullWorkouts(int weekNum) {
+  // Day 3: Shoulders & Traps
+  List<Map<String, dynamic>> _getDay3Workouts() {
     return [
-      {'name': 'Deadlift', 'notes': 'Use lifting straps if needed', 'weights': [225.0, 275.0, 315.0]},
-      {'name': 'Barbell Row', 'notes': 'Pull to lower chest', 'weights': [135.0, 155.0, 175.0]},
-      {'name': 'Lat Pulldown', 'notes': null, 'weights': [120.0, 135.0, 150.0]},
+      {'name': 'Overhead Press', 'notes': 'Keep core tight', 'baseWeights': [40.0, 50.0, 60.0, 70.0]},
+      {'name': 'Dumbbell Lateral Raise', 'notes': 'Slight bend in elbows', 'baseWeights': [15.0, 20.0, 25.0]},
+      {'name': 'Face Pulls', 'notes': 'Pull to face level', 'baseWeights': [30.0, 40.0, 50.0]},
+      {'name': 'Dumbbell Front Raise', 'notes': 'Alternating arms', 'baseWeights': [15.0, 20.0, 25.0]},
+      {'name': 'Barbell Shrugs', 'notes': 'Hold at top', 'baseWeights': [60.0, 80.0, 100.0]},
     ];
   }
 
-  List<Map<String, dynamic>> _getArmsWorkouts(int weekNum) {
+  // Day 4: Legs
+  List<Map<String, dynamic>> _getDay4Workouts() {
     return [
-      {'name': 'Close Grip Bench', 'notes': 'Elbows tucked', 'weights': [115.0, 135.0, 155.0]},
-      {'name': 'Dips', 'notes': 'Bodyweight or add weight', 'weights': [0.0, 25.0, 45.0]},
-      {'name': 'Tricep Extension', 'notes': null, 'weights': [70.0, 80.0, 90.0]},
+      {'name': 'Squat', 'notes': 'Full depth, knees out', 'baseWeights': [80.0, 100.0, 120.0, 140.0]},
+      {'name': 'Romanian Deadlift', 'notes': 'Feel hamstring stretch', 'baseWeights': [60.0, 70.0, 80.0]},
+      {'name': 'Leg Press', 'notes': 'Feet shoulder width', 'baseWeights': [100.0, 120.0, 140.0]},
+      {'name': 'Leg Curl', 'notes': 'Control the negative', 'baseWeights': [40.0, 50.0, 60.0]},
+      {'name': 'Calf Raise', 'notes': 'Full stretch and contraction', 'baseWeights': [60.0, 80.0, 100.0]},
     ];
   }
+
 }
