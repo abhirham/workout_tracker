@@ -72,7 +72,9 @@ class DatabaseSeeder {
         final workouts = day['workouts'] as List<Map<String, dynamic>>;
         for (int i = 0; i < workouts.length; i++) {
           final workout = workouts[i];
-          final workoutId = '${dayId}_workout_${i + 1}';
+          // Unique workout ID per day (e.g., "week1_day_1_bench-press")
+          final workoutName = _normalizeWorkoutId(workout['name'] as String);
+          final workoutId = '${dayId}_$workoutName';
 
           final baseWeights = workout['baseWeights'] as List<double>;
 
@@ -80,8 +82,8 @@ class DatabaseSeeder {
             WorkoutsCompanion.insert(
               id: workoutId,
               dayId: dayId,
+              workoutName: workoutName,  // Consistent across weeks (e.g., "bench-press")
               name: workout['name'] as String,
-              baseWorkoutName: workout['name'] as String,  // Use workout name as base identifier
               order: i,
               notes: Value(workout['notes'] as String?),
               defaultSets: baseWeights.length,
@@ -90,12 +92,13 @@ class DatabaseSeeder {
           );
 
           // Add set templates with week-specific rep targets and calculated weights
+          // Note: Set templates are still unique per day/week combo since they have week-specific weights
           for (int setNum = 0; setNum < baseWeights.length; setNum++) {
             final calculatedWeight = _calculateWeight(baseWeights[setNum], weekNum);
 
             await _database.into(_database.setTemplates).insert(
               SetTemplatesCompanion.insert(
-                id: '${workoutId}_set_${setNum + 1}',
+                id: '${dayId}_${workoutId}_set_${setNum + 1}',
                 workoutId: workoutId,
                 setNumber: setNum + 1,
                 suggestedReps: Value(_getTargetReps(weekNum)),
@@ -106,9 +109,10 @@ class DatabaseSeeder {
           }
 
           // Add timer config (45 seconds rest between sets)
+          // Note: Timer configs could be shared, but we keep them per day/week for flexibility
           await _database.into(_database.timerConfigs).insert(
             TimerConfigsCompanion.insert(
-              id: '${workoutId}_timer',
+              id: '${dayId}_${workoutId}_timer',
               workoutId: Value(workoutId),
               durationSeconds: 45,
               isActive: true,
@@ -118,6 +122,11 @@ class DatabaseSeeder {
         }
       }
     }
+  }
+
+  /// Normalize workout name to a consistent ID (e.g., "Bench Press" -> "bench-press")
+  String _normalizeWorkoutId(String workoutName) {
+    return workoutName.toLowerCase().replaceAll(' ', '-');
   }
 
   int _getTargetReps(int weekNumber) {

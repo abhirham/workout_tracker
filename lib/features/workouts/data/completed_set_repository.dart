@@ -13,6 +13,7 @@ class CompletedSetRepository {
           CompletedSetsCompanion.insert(
             id: completedSet.id,
             userId: completedSet.userId,
+            weekId: completedSet.weekId,
             workoutId: completedSet.workoutId,
             setNumber: completedSet.setNumber,
             weight: completedSet.weight,
@@ -23,15 +24,17 @@ class CompletedSetRepository {
         );
   }
 
-  // Get all completed sets for a specific workout
+  // Get all completed sets for a specific workout in a specific week
   Future<List<model.CompletedSet>> getCompletedSetsForWorkout(
     String userId,
+    String weekId,
     String workoutId, {
     String? alternativeId,
   }) async {
     final query = _database.select(_database.completedSets)
       ..where((tbl) =>
           tbl.userId.equals(userId) &
+          tbl.weekId.equals(weekId) &
           tbl.workoutId.equals(workoutId) &
           (alternativeId != null
               ? tbl.workoutAlternativeId.equals(alternativeId)
@@ -44,6 +47,7 @@ class CompletedSetRepository {
         .map((row) => model.CompletedSet(
               id: row.id,
               userId: row.userId,
+              weekId: row.weekId,
               workoutId: row.workoutId,
               setNumber: row.setNumber,
               weight: row.weight,
@@ -54,9 +58,10 @@ class CompletedSetRepository {
         .toList();
   }
 
-  // Get the most recent completed set for a specific set number
+  // Get the most recent completed set for a specific set number in a specific week
   Future<model.CompletedSet?> getLastCompletedSet(
     String userId,
+    String weekId,
     String workoutId,
     int setNumber, {
     String? alternativeId,
@@ -64,6 +69,7 @@ class CompletedSetRepository {
     final query = _database.select(_database.completedSets)
       ..where((tbl) =>
           tbl.userId.equals(userId) &
+          tbl.weekId.equals(weekId) &
           tbl.workoutId.equals(workoutId) &
           tbl.setNumber.equals(setNumber) &
           (alternativeId != null
@@ -79,6 +85,7 @@ class CompletedSetRepository {
     return model.CompletedSet(
       id: result.id,
       userId: result.userId,
+      weekId: result.weekId,
       workoutId: result.workoutId,
       setNumber: result.setNumber,
       weight: result.weight,
@@ -88,15 +95,17 @@ class CompletedSetRepository {
     );
   }
 
-  // Delete all completed sets for a workout (useful when deleting alternative)
+  // Delete all completed sets for a workout in a specific week (useful when deleting alternative)
   Future<void> deleteCompletedSetsForWorkout(
     String userId,
+    String weekId,
     String workoutId, {
     String? alternativeId,
   }) async {
     await (_database.delete(_database.completedSets)
           ..where((tbl) =>
               tbl.userId.equals(userId) &
+              tbl.weekId.equals(weekId) &
               tbl.workoutId.equals(workoutId) &
               (alternativeId != null
                   ? tbl.workoutAlternativeId.equals(alternativeId)

@@ -78,7 +78,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
         return {
           'id': workoutWithSets.workout.id,
           'name': workoutWithSets.workout.name,
-          'baseWorkoutName': workoutWithSets.workout.baseWorkoutName,  // Add for alternatives linking
+          'workoutName': workoutWithSets.workout.workoutName,  // Consistent across weeks
           'notes': workoutWithSets.workout.notes,
           'timerSeconds': workoutWithSets.timerConfig?.durationSeconds ?? 45,
           'sets': workoutWithSets.sets.map((setTemplate) {
@@ -108,13 +108,11 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     final currentWorkout = workouts[currentWorkoutIndex];
     final workoutId = currentWorkout['id'] as String;
 
-    // Create composite workoutId: weekId---workoutId for week-specific progress
-    final compositeWorkoutId = '${widget.weekId}---$workoutId';
-
-    // Get all completed sets for this workout (filtered by alternative if selected)
+    // Get all completed sets for this workout in this week (filtered by alternative if selected)
     final completedSets = await repository.getCompletedSetsForWorkout(
       userId,
-      compositeWorkoutId,
+      widget.weekId,
+      workoutId,
       alternativeId: selectedAlternativeId,
     );
 
@@ -215,13 +213,11 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     final currentWorkout = workouts[currentWorkoutIndex];
     const uuid = Uuid();
 
-    // Create composite workoutId: weekId---workoutId for week-specific progress
-    final compositeWorkoutId = '${widget.weekId}---${currentWorkout['id']}';
-
     final completedSet = CompletedSet(
       id: uuid.v4(),
       userId: userId,
-      workoutId: compositeWorkoutId,
+      weekId: widget.weekId,
+      workoutId: currentWorkout['id'] as String,
       setNumber: set['setNumber'] as int,
       weight: (set['actualWeight'] as double?) ?? 0.0,
       reps: (set['actualReps'] as int?) ?? 0,
@@ -248,7 +244,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   Future<void> _showAlternativesModal() async {
     final currentWorkout = workouts[currentWorkoutIndex];
     final originalWorkoutName = currentWorkout['name'] as String;
-    final baseWorkoutName = currentWorkout['baseWorkoutName'] as String;
+    final workoutName = currentWorkout['workoutName'] as String;
 
     // Load alternatives from repository
     final repository = ref.read(workoutAlternativeRepositoryProvider);
@@ -257,7 +253,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
 
     final alternatives = await repository.getAlternativesForWorkout(
       userId,
-      baseWorkoutName,
+      workoutName,
     );
 
     if (!mounted) return;
@@ -266,7 +262,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     showModalBottomSheet(
       context: context,
       builder: (context) => _AlternativesBottomSheet(
-        baseWorkoutName: baseWorkoutName,
+        workoutName: workoutName,
         originalWorkoutName: originalWorkoutName,
         selectedAlternativeId: selectedAlternativeId,
         alternatives: alternatives,
@@ -285,7 +281,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
           final newAlternative = WorkoutAlternative(
             id: uuid.v4(),
             userId: userId,
-            baseWorkoutName: baseWorkoutName,
+            workoutName: workoutName,
             name: name,
             createdAt: DateTime.now(),
           );
@@ -903,7 +899,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
 
 // Bottom sheet widget for selecting/creating alternatives
 class _AlternativesBottomSheet extends StatefulWidget {
-  final String baseWorkoutName;
+  final String workoutName;
   final String originalWorkoutName;
   final String? selectedAlternativeId;
   final List<WorkoutAlternative> alternatives;
@@ -911,7 +907,7 @@ class _AlternativesBottomSheet extends StatefulWidget {
   final Function(String name) onCreateAlternative;
 
   const _AlternativesBottomSheet({
-    required this.baseWorkoutName,
+    required this.workoutName,
     required this.originalWorkoutName,
     required this.selectedAlternativeId,
     required this.alternatives,

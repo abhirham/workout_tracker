@@ -39,16 +39,16 @@ class Days extends Table {
 }
 
 class Workouts extends Table {
-  TextColumn get id => text()();
+  TextColumn get id => text()();  // Composite ID: dayId + workoutName (e.g., "week1_day_1_bench-press")
   TextColumn get dayId => text().references(Days, #id)();
-  TextColumn get name => text()();
-  TextColumn get baseWorkoutName => text()();  // Base identifier for linking alternatives across weeks
+  TextColumn get workoutName => text()();  // Base workout name (e.g., "bench-press") - consistent across weeks
+  TextColumn get name => text()();  // Display name (e.g., "Bench Press")
   IntColumn get order => integer()();
   TextColumn get notes => text().nullable()();
   IntColumn get defaultSets => integer()();
 
   @override
-  Set<Column> get primaryKey => {id};
+  Set<Column> get primaryKey => {id};  // Single primary key for foreign key references
 }
 
 class SetTemplates extends Table {
@@ -85,7 +85,8 @@ class UserProfiles extends Table {
 class CompletedSets extends Table {
   TextColumn get id => text()();
   TextColumn get userId => text()();
-  TextColumn get workoutId => text()();
+  TextColumn get weekId => text()();  // Part of composite key
+  TextColumn get workoutId => text()();  // References Workouts.id
   IntColumn get setNumber => integer()();
   RealColumn get weight => real()();
   IntColumn get reps => integer()();
@@ -98,19 +99,20 @@ class CompletedSets extends Table {
 
 class WorkoutProgressTable extends Table {
   TextColumn get userId => text()();
-  TextColumn get workoutId => text()();
+  TextColumn get weekId => text()();  // Part of composite key
+  TextColumn get workoutId => text()();  // References Workouts.id
   DateTimeColumn get lastCompletedAt => dateTime()();
   IntColumn get totalSets => integer()();
 
   @override
-  Set<Column> get primaryKey => {userId, workoutId};
+  Set<Column> get primaryKey => {userId, weekId, workoutId};  // Composite key for tracking progress per week
 }
 
 // User-Specific Workout Alternatives
 class WorkoutAlternatives extends Table {
   TextColumn get id => text()();
   TextColumn get userId => text()();
-  TextColumn get baseWorkoutName => text()();  // Links to workout.baseWorkoutName instead of specific workout ID
+  TextColumn get workoutName => text()();  // Links to Workouts.workoutName (e.g., "bench-press") - consistent across weeks
   TextColumn get name => text()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -149,7 +151,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
@@ -214,6 +216,32 @@ class AppDatabase extends _$AppDatabase {
           await customStatement('DELETE FROM days');
           await customStatement('DELETE FROM weeks');
           await customStatement('DELETE FROM workout_plans');
+        }
+        if (from < 6) {
+          // Major schema change: workouts now have consistent IDs across weeks
+          // Progress tracking uses composite weekId-workoutId
+
+          // Drop and recreate tables with new schema (safer than trying to migrate)
+          await customStatement('DROP TABLE IF EXISTS set_templates');
+          await customStatement('DROP TABLE IF EXISTS timer_configs');
+          await customStatement('DROP TABLE IF EXISTS completed_sets');
+          await customStatement('DROP TABLE IF EXISTS workout_progress');
+          await customStatement('DROP TABLE IF EXISTS workout_alternatives');
+          await customStatement('DROP TABLE IF EXISTS workouts');
+          await customStatement('DROP TABLE IF EXISTS days');
+          await customStatement('DROP TABLE IF EXISTS weeks');
+          await customStatement('DROP TABLE IF EXISTS workout_plans');
+
+          // Recreate all tables with new schema
+          await m.createTable(workoutPlans);
+          await m.createTable(weeks);
+          await m.createTable(days);
+          await m.createTable(workouts);
+          await m.createTable(setTemplates);
+          await m.createTable(timerConfigs);
+          await m.createTable(completedSets);
+          await m.createTable(workoutProgressTable);
+          await m.createTable(workoutAlternatives);
         }
       },
     );

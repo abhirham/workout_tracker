@@ -7,7 +7,8 @@ part 'workout_progress.g.dart';
 class WorkoutProgress with _$WorkoutProgress {
   const factory WorkoutProgress({
     required String userId,
-    required String workoutId,
+    required String weekId,  // Part of composite key for tracking progress per week
+    required String workoutId,  // References Workouts.id (consistent across weeks)
     required DateTime lastCompletedAt,
     required int totalSets,
   }) = _WorkoutProgress;
