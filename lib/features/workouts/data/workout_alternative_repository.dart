@@ -13,22 +13,22 @@ class WorkoutAlternativeRepository {
           WorkoutAlternativesCompanion.insert(
             id: alternative.id,
             userId: alternative.userId,
-            originalWorkoutId: alternative.originalWorkoutId,
+            baseWorkoutName: alternative.baseWorkoutName,
             name: alternative.name,
             createdAt: alternative.createdAt,
           ),
         );
   }
 
-  // Get all alternatives for a specific workout
+  // Get all alternatives for a specific workout (by baseWorkoutName)
   Future<List<model.WorkoutAlternative>> getAlternativesForWorkout(
     String userId,
-    String originalWorkoutId,
+    String baseWorkoutName,
   ) async {
     final query = _database.select(_database.workoutAlternatives)
       ..where((tbl) =>
           tbl.userId.equals(userId) &
-          tbl.originalWorkoutId.equals(originalWorkoutId))
+          tbl.baseWorkoutName.equals(baseWorkoutName))
       ..orderBy([(tbl) => OrderingTerm.asc(tbl.createdAt)]);
 
     final results = await query.get();
@@ -37,7 +37,7 @@ class WorkoutAlternativeRepository {
         .map((row) => model.WorkoutAlternative(
               id: row.id,
               userId: row.userId,
-              originalWorkoutId: row.originalWorkoutId,
+              baseWorkoutName: row.baseWorkoutName,
               name: row.name,
               createdAt: row.createdAt,
             ))
@@ -56,7 +56,7 @@ class WorkoutAlternativeRepository {
     return model.WorkoutAlternative(
       id: result.id,
       userId: result.userId,
-      originalWorkoutId: result.originalWorkoutId,
+      baseWorkoutName: result.baseWorkoutName,
       name: result.name,
       createdAt: result.createdAt,
     );

@@ -81,6 +81,7 @@ class DatabaseSeeder {
               id: workoutId,
               dayId: dayId,
               name: workout['name'] as String,
+              baseWorkoutName: workout['name'] as String,  // Use workout name as base identifier
               order: i,
               notes: Value(workout['notes'] as String?),
               defaultSets: baseWeights.length,

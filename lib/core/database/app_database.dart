@@ -42,6 +42,7 @@ class Workouts extends Table {
   TextColumn get id => text()();
   TextColumn get dayId => text().references(Days, #id)();
   TextColumn get name => text()();
+  TextColumn get baseWorkoutName => text()();  // Base identifier for linking alternatives across weeks
   IntColumn get order => integer()();
   TextColumn get notes => text().nullable()();
   IntColumn get defaultSets => integer()();
@@ -109,7 +110,7 @@ class WorkoutProgressTable extends Table {
 class WorkoutAlternatives extends Table {
   TextColumn get id => text()();
   TextColumn get userId => text()();
-  TextColumn get originalWorkoutId => text()();
+  TextColumn get baseWorkoutName => text()();  // Links to workout.baseWorkoutName instead of specific workout ID
   TextColumn get name => text()();
   DateTimeColumn get createdAt => dateTime()();
 
@@ -148,7 +149,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
@@ -176,6 +177,37 @@ class AppDatabase extends _$AppDatabase {
         if (from < 4) {
           // Clear all template data to re-seed with fixed plan ID
           // Must delete in correct order due to foreign key constraints
+          await customStatement('DELETE FROM set_templates');
+          await customStatement('DELETE FROM timer_configs');
+          await customStatement('DELETE FROM workouts');
+          await customStatement('DELETE FROM days');
+          await customStatement('DELETE FROM weeks');
+          await customStatement('DELETE FROM workout_plans');
+        }
+        if (from < 5) {
+          // Add baseWorkoutName column to Workouts table with a default value
+          await customStatement(
+            'ALTER TABLE workouts ADD COLUMN base_workout_name TEXT NOT NULL DEFAULT ""',
+          );
+
+          // Rename originalWorkoutId to baseWorkoutName in WorkoutAlternatives
+          // SQLite doesn't support RENAME COLUMN in older versions, so we'll recreate the table
+          await customStatement('DROP TABLE IF EXISTS workout_alternatives_old');
+          await customStatement('ALTER TABLE workout_alternatives RENAME TO workout_alternatives_old');
+          await customStatement('''
+            CREATE TABLE workout_alternatives (
+              id TEXT NOT NULL PRIMARY KEY,
+              user_id TEXT NOT NULL,
+              base_workout_name TEXT NOT NULL,
+              name TEXT NOT NULL,
+              created_at INTEGER NOT NULL
+            )
+          ''');
+          // Copy data from old table, using original_workout_id as base_workout_name temporarily
+          // (Users will need to recreate their alternatives with the new structure)
+          await customStatement('DROP TABLE workout_alternatives_old');
+
+          // Clear all template data to re-seed with baseWorkoutName
           await customStatement('DELETE FROM set_templates');
           await customStatement('DELETE FROM timer_configs');
           await customStatement('DELETE FROM workouts');

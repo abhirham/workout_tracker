@@ -78,6 +78,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
         return {
           'id': workoutWithSets.workout.id,
           'name': workoutWithSets.workout.name,
+          'baseWorkoutName': workoutWithSets.workout.baseWorkoutName,  // Add for alternatives linking
           'notes': workoutWithSets.workout.notes,
           'timerSeconds': workoutWithSets.timerConfig?.durationSeconds ?? 45,
           'sets': workoutWithSets.sets.map((setTemplate) {
@@ -228,7 +229,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   Future<void> _showAlternativesModal() async {
     final currentWorkout = workouts[currentWorkoutIndex];
     final originalWorkoutName = currentWorkout['name'] as String;
-    final originalWorkoutId = currentWorkout['id'] as String;
+    final baseWorkoutName = currentWorkout['baseWorkoutName'] as String;
 
     // Load alternatives from repository
     final repository = ref.read(workoutAlternativeRepositoryProvider);
@@ -237,7 +238,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
 
     final alternatives = await repository.getAlternativesForWorkout(
       userId,
-      originalWorkoutId,
+      baseWorkoutName,
     );
 
     if (!mounted) return;
@@ -246,7 +247,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     showModalBottomSheet(
       context: context,
       builder: (context) => _AlternativesBottomSheet(
-        originalWorkoutId: originalWorkoutId,
+        baseWorkoutName: baseWorkoutName,
         originalWorkoutName: originalWorkoutName,
         selectedAlternativeId: selectedAlternativeId,
         alternatives: alternatives,
@@ -265,7 +266,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
           final newAlternative = WorkoutAlternative(
             id: uuid.v4(),
             userId: userId,
-            originalWorkoutId: originalWorkoutId,
+            baseWorkoutName: baseWorkoutName,
             name: name,
             createdAt: DateTime.now(),
           );
@@ -871,7 +872,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
 
 // Bottom sheet widget for selecting/creating alternatives
 class _AlternativesBottomSheet extends StatefulWidget {
-  final String originalWorkoutId;
+  final String baseWorkoutName;
   final String originalWorkoutName;
   final String? selectedAlternativeId;
   final List<WorkoutAlternative> alternatives;
@@ -879,7 +880,7 @@ class _AlternativesBottomSheet extends StatefulWidget {
   final Function(String name) onCreateAlternative;
 
   const _AlternativesBottomSheet({
-    required this.originalWorkoutId,
+    required this.baseWorkoutName,
     required this.originalWorkoutName,
     required this.selectedAlternativeId,
     required this.alternatives,

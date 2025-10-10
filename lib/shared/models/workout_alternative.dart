@@ -8,7 +8,7 @@ class WorkoutAlternative with _$WorkoutAlternative {
   const factory WorkoutAlternative({
     required String id,
     required String userId,
-    required String originalWorkoutId,
+    required String baseWorkoutName,  // Links to workout.baseWorkoutName for cross-week alternatives
     required String name,
     required DateTime createdAt,
   }) = _WorkoutAlternative;
