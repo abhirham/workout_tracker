@@ -4,8 +4,6 @@ import 'app_database.dart';
 /// Service to seed the database with initial workout template data
 class DatabaseSeeder {
   final AppDatabase _database;
-  static const _seedVersionKey = 'seed_version';
-  static const _currentSeedVersion = 1;
 
   DatabaseSeeder(this._database);
 

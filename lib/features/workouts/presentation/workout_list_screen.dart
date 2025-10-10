@@ -59,7 +59,6 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   @override
   void initState() {
     super.initState();
-    print('🔧 WorkoutListScreen initialized: weekNumber = ${widget.weekNumber}, weekId = ${widget.weekId}');
     // Load workouts from database first, then load progress
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadWorkouts();
@@ -166,8 +165,6 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     // Phases are 4 weeks long: Week 1-4 (Phase 1), Week 5-8 (Phase 2), Week 9-12 (Phase 3), etc.
     final isPhaseStart = (widget.weekNumber - 1) % 4 == 0 && widget.weekNumber > 1;
 
-    print('🔍 Week ${widget.weekNumber}: isPhaseStart = $isPhaseStart, workoutName = $workoutName');
-
     // For each uncompleted set, try to load the last weight from previous weeks
     for (final set in sets) {
       if (set['completed'] == false && set['actualWeight'] == null) {
@@ -180,8 +177,6 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
           final previousPhaseWeek1Number = widget.weekNumber - 4;
           final previousPhaseWeek1Id = 'week_$previousPhaseWeek1Number';
 
-          print('📊 Phase boundary detected! Looking for week_id: $previousPhaseWeek1Id');
-
           referenceSet = await repository.getCompletedSetForSpecificWeek(
             userId,
             previousPhaseWeek1Id,
@@ -189,8 +184,6 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
             setNumber,
             alternativeId: selectedAlternativeId,
           );
-
-          print('   Found referenceSet: ${referenceSet != null ? "${referenceSet.weight} lbs from ${referenceSet.weekId}" : "null"}');
         } else {
           // Within phase: use most recent completed set (previous week)
           referenceSet = await repository.getLastCompletedSetAcrossWeeks(
@@ -199,8 +192,6 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
             setNumber,
             alternativeId: selectedAlternativeId,
           );
-
-          print('   Within phase - Found most recent: ${referenceSet != null ? "${referenceSet.weight} lbs from ${referenceSet.weekId}" : "null"}');
         }
 
         if (referenceSet != null) {
@@ -209,12 +200,9 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
           // - phase(n+1)week(1) = phase(n)week(1) + 5
           // - phase(n)week(m) = phase(n)week(m-1) + 5 (where m > 1)
           final newWeight = referenceSet.weight + 5;
-          print('   ✅ Setting weight: ${referenceSet.weight} + 5 = $newWeight lbs');
           setState(() {
             set['actualWeight'] = newWeight;
           });
-        } else {
-          print('   ⚠️  No reference set found');
         }
       }
     }
@@ -798,7 +786,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                                           double.tryParse(weightController.text) ??
                                               0.0;
                                       final newValue =
-                                          (currentValue - 2.5).clamp(0.0, 9999.0) as double;
+                                          (currentValue - 2.5).clamp(0.0, 9999.0);
                                       weightController.text =
                                           newValue.toStringAsFixed(1);
                                       setState(() {
