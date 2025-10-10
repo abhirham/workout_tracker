@@ -154,4 +154,48 @@ class CompletedSetRepository {
       workoutAlternativeId: row.workoutAlternativeId,
     );
   }
+
+  // Get a completed set for a specific week (for phase-aware weight lookup)
+  // Used to find weight from a specific week (e.g., Week 1 when calculating Week 5)
+  Future<model.CompletedSet?> getCompletedSetForSpecificWeek(
+    String userId,
+    String weekId,
+    String workoutName,  // e.g., "bench-press"
+    int setNumber, {
+    String? alternativeId,
+  }) async {
+    // Join with workouts table to filter by workoutName
+    final query = _database.select(_database.completedSets).join([
+      innerJoin(
+        _database.workouts,
+        _database.workouts.id.equalsExp(_database.completedSets.workoutId),
+      ),
+    ])
+      ..where(_database.completedSets.userId.equals(userId) &
+          _database.completedSets.weekId.equals(weekId) &
+          _database.workouts.workoutName.equals(workoutName) &
+          _database.completedSets.setNumber.equals(setNumber) &
+          (alternativeId != null
+              ? _database.completedSets.workoutAlternativeId.equals(alternativeId)
+              : _database.completedSets.workoutAlternativeId.isNull()))
+      ..orderBy([OrderingTerm.desc(_database.completedSets.completedAt)])
+      ..limit(1);
+
+    final result = await query.getSingleOrNull();
+
+    if (result == null) return null;
+
+    final row = result.readTable(_database.completedSets);
+    return model.CompletedSet(
+      id: row.id,
+      userId: row.userId,
+      weekId: row.weekId,
+      workoutId: row.workoutId,
+      setNumber: row.setNumber,
+      weight: row.weight,
+      reps: row.reps,
+      completedAt: row.completedAt,
+      workoutAlternativeId: row.workoutAlternativeId,
+    );
+  }
 }

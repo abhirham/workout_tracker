@@ -1,6 +1,5 @@
 import 'package:drift/drift.dart';
 import 'app_database.dart';
-import 'package:uuid/uuid.dart';
 
 /// Service to seed the database with initial workout template data
 class DatabaseSeeder {
@@ -21,8 +20,6 @@ class DatabaseSeeder {
   }
 
   Future<void> _seedWorkoutTemplates() async {
-    const uuid = Uuid();
-
     // Create a single workout plan with fixed ID to match mock UI
     const planId = '1';  // Fixed ID to match WorkoutPlanListScreen mock data
     await _database.into(_database.workoutPlans).insert(
@@ -37,7 +34,7 @@ class DatabaseSeeder {
 
     // Create 8 weeks (2 phases of 4 weeks each)
     for (int weekNum = 1; weekNum <= 8; weekNum++) {
-      final weekId = uuid.v4();
+      final weekId = 'week_$weekNum';  // Use consistent format: week_1, week_2, etc.
       await _database.into(_database.weeks).insert(
         WeeksCompanion.insert(
           id: weekId,
@@ -45,6 +42,7 @@ class DatabaseSeeder {
           weekNumber: weekNum,
           name: 'Week $weekNum',
         ),
+        mode: InsertMode.insertOrReplace,
       );
 
       // Create 4 training days per week

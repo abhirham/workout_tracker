@@ -59,6 +59,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   @override
   void initState() {
     super.initState();
+    print('🔧 WorkoutListScreen initialized: weekNumber = ${widget.weekNumber}, weekId = ${widget.weekId}');
     // Load workouts from database first, then load progress
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadWorkouts();
@@ -161,24 +162,59 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     final currentWorkout = workouts[currentWorkoutIndex];
     final sets = currentWorkout['sets'] as List;
 
+    // Determine if this is a phase boundary week
+    // Phases are 4 weeks long: Week 1-4 (Phase 1), Week 5-8 (Phase 2), Week 9-12 (Phase 3), etc.
+    final isPhaseStart = (widget.weekNumber - 1) % 4 == 0 && widget.weekNumber > 1;
+
+    print('🔍 Week ${widget.weekNumber}: isPhaseStart = $isPhaseStart, workoutName = $workoutName');
+
     // For each uncompleted set, try to load the last weight from previous weeks
     for (final set in sets) {
       if (set['completed'] == false && set['actualWeight'] == null) {
         final setNumber = set['setNumber'] as int;
-        final lastSet = await repository.getLastCompletedSetAcrossWeeks(
-          userId,
-          workoutName,
-          setNumber,
-          alternativeId: selectedAlternativeId,
-        );
+        CompletedSet? referenceSet;
 
-        if (lastSet != null) {
-          // Progressive overload: add 5 lbs to the last completed weight
-          // This follows the rule: phase(n)week(m) = phase(n)week(m-1) + 5
-          final newWeight = lastSet.weight + 5;
+        if (isPhaseStart) {
+          // Phase boundary: look back to Week 1 of previous phase
+          // e.g., Week 5 → Week 1, Week 9 → Week 5, Week 13 → Week 9
+          final previousPhaseWeek1Number = widget.weekNumber - 4;
+          final previousPhaseWeek1Id = 'week_$previousPhaseWeek1Number';
+
+          print('📊 Phase boundary detected! Looking for week_id: $previousPhaseWeek1Id');
+
+          referenceSet = await repository.getCompletedSetForSpecificWeek(
+            userId,
+            previousPhaseWeek1Id,
+            workoutName,
+            setNumber,
+            alternativeId: selectedAlternativeId,
+          );
+
+          print('   Found referenceSet: ${referenceSet != null ? "${referenceSet.weight} lbs from ${referenceSet.weekId}" : "null"}');
+        } else {
+          // Within phase: use most recent completed set (previous week)
+          referenceSet = await repository.getLastCompletedSetAcrossWeeks(
+            userId,
+            workoutName,
+            setNumber,
+            alternativeId: selectedAlternativeId,
+          );
+
+          print('   Within phase - Found most recent: ${referenceSet != null ? "${referenceSet.weight} lbs from ${referenceSet.weekId}" : "null"}');
+        }
+
+        if (referenceSet != null) {
+          // Progressive overload: add 5 lbs to the reference weight
+          // This follows the rules:
+          // - phase(n+1)week(1) = phase(n)week(1) + 5
+          // - phase(n)week(m) = phase(n)week(m-1) + 5 (where m > 1)
+          final newWeight = referenceSet.weight + 5;
+          print('   ✅ Setting weight: ${referenceSet.weight} + 5 = $newWeight lbs');
           setState(() {
             set['actualWeight'] = newWeight;
           });
+        } else {
+          print('   ⚠️  No reference set found');
         }
       }
     }
