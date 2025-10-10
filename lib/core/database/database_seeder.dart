@@ -17,6 +17,25 @@ class DatabaseSeeder {
     }
   }
 
+  /// Delete all data and reseed from scratch
+  Future<void> deleteAndReseed() async {
+    // Delete all data in correct order (reverse of foreign key dependencies)
+    await _database.delete(_database.completedSets).go();
+    await _database.delete(_database.workoutProgressTable).go();
+    await _database.delete(_database.workoutAlternatives).go();
+    await _database.delete(_database.setTemplates).go();
+    await _database.delete(_database.timerConfigs).go();
+    await _database.delete(_database.workouts).go();
+    await _database.delete(_database.days).go();
+    await _database.delete(_database.weeks).go();
+    await _database.delete(_database.workoutPlans).go();
+    await _database.delete(_database.userProfiles).go();
+    await _database.delete(_database.syncQueue).go();
+
+    // Reseed with fresh data
+    await _seedWorkoutTemplates();
+  }
+
   Future<void> _seedWorkoutTemplates() async {
     // Create a single workout plan with fixed ID to match mock UI
     const planId = '1';  // Fixed ID to match WorkoutPlanListScreen mock data
@@ -157,45 +176,45 @@ class DatabaseSeeder {
   // Day 1: Chest & Triceps
   List<Map<String, dynamic>> _getDay1Workouts() {
     return [
-      {'name': 'Bench Press', 'notes': 'Focus on controlled eccentric', 'baseWeights': [60.0, 70.0, 80.0, 90.0]},
-      {'name': 'Incline Dumbbell Press', 'notes': '30-45 degree angle', 'baseWeights': [40.0, 50.0, 60.0]},
-      {'name': 'Cable Flyes', 'notes': 'Squeeze at center', 'baseWeights': [30.0, 40.0, 50.0]},
-      {'name': 'Tricep Dips', 'notes': 'Lean forward for chest emphasis', 'baseWeights': [0.0, 15.0, 25.0]},
-      {'name': 'Tricep Pushdown', 'notes': 'Keep elbows stationary', 'baseWeights': [40.0, 50.0, 60.0]},
+      {'name': 'Bench Press', 'notes': 'Focus on controlled eccentric', 'baseWeights': [10.0, 10.0, 10.0, 10.0]},
+      {'name': 'Incline Dumbbell Press', 'notes': '30-45 degree angle', 'baseWeights': [10.0, 10.0, 10.0]},
+      {'name': 'Cable Flyes', 'notes': 'Squeeze at center', 'baseWeights': [10.0, 10.0, 10.0]},
+      {'name': 'Tricep Dips', 'notes': 'Lean forward for chest emphasis', 'baseWeights': [10.0, 10.0, 10.0]},
+      {'name': 'Tricep Pushdown', 'notes': 'Keep elbows stationary', 'baseWeights': [10.0, 10.0, 10.0]},
     ];
   }
 
   // Day 2: Back & Biceps
   List<Map<String, dynamic>> _getDay2Workouts() {
     return [
-      {'name': 'Deadlift', 'notes': 'Keep back neutral', 'baseWeights': [80.0, 100.0, 120.0, 130.0]},
-      {'name': 'Pull-ups', 'notes': 'Full range of motion', 'baseWeights': [0.0, 10.0, 20.0]},
-      {'name': 'Barbell Row', 'notes': 'Pull to lower chest', 'baseWeights': [60.0, 70.0, 80.0]},
-      {'name': 'Lat Pulldown', 'notes': 'Wide grip', 'baseWeights': [50.0, 60.0, 70.0]},
-      {'name': 'Barbell Curl', 'notes': 'No swinging', 'baseWeights': [30.0, 35.0, 40.0]},
-      {'name': 'Hammer Curl', 'notes': 'Alternating arms', 'baseWeights': [20.0, 25.0, 30.0]},
+      {'name': 'Deadlift', 'notes': 'Keep back neutral', 'baseWeights': [10.0, 10.0, 10.0, 10.0]},
+      {'name': 'Pull-ups', 'notes': 'Full range of motion', 'baseWeights': [10.0, 10.0, 10.0]},
+      {'name': 'Barbell Row', 'notes': 'Pull to lower chest', 'baseWeights': [10.0, 10.0, 10.0]},
+      {'name': 'Lat Pulldown', 'notes': 'Wide grip', 'baseWeights': [10.0, 10.0, 10.0]},
+      {'name': 'Barbell Curl', 'notes': 'No swinging', 'baseWeights': [10.0, 10.0, 10.0]},
+      {'name': 'Hammer Curl', 'notes': 'Alternating arms', 'baseWeights': [10.0, 10.0, 10.0]},
     ];
   }
 
   // Day 3: Shoulders & Traps
   List<Map<String, dynamic>> _getDay3Workouts() {
     return [
-      {'name': 'Overhead Press', 'notes': 'Keep core tight', 'baseWeights': [40.0, 50.0, 60.0, 70.0]},
-      {'name': 'Dumbbell Lateral Raise', 'notes': 'Slight bend in elbows', 'baseWeights': [15.0, 20.0, 25.0]},
-      {'name': 'Face Pulls', 'notes': 'Pull to face level', 'baseWeights': [30.0, 40.0, 50.0]},
-      {'name': 'Dumbbell Front Raise', 'notes': 'Alternating arms', 'baseWeights': [15.0, 20.0, 25.0]},
-      {'name': 'Barbell Shrugs', 'notes': 'Hold at top', 'baseWeights': [60.0, 80.0, 100.0]},
+      {'name': 'Overhead Press', 'notes': 'Keep core tight', 'baseWeights': [10.0, 10.0, 10.0, 10.0]},
+      {'name': 'Dumbbell Lateral Raise', 'notes': 'Slight bend in elbows', 'baseWeights': [10.0, 10.0, 10.0]},
+      {'name': 'Face Pulls', 'notes': 'Pull to face level', 'baseWeights': [10.0, 10.0, 10.0]},
+      {'name': 'Dumbbell Front Raise', 'notes': 'Alternating arms', 'baseWeights': [10.0, 10.0, 10.0]},
+      {'name': 'Barbell Shrugs', 'notes': 'Hold at top', 'baseWeights': [10.0, 10.0, 10.0]},
     ];
   }
 
   // Day 4: Legs
   List<Map<String, dynamic>> _getDay4Workouts() {
     return [
-      {'name': 'Squat', 'notes': 'Full depth, knees out', 'baseWeights': [80.0, 100.0, 120.0, 140.0]},
-      {'name': 'Romanian Deadlift', 'notes': 'Feel hamstring stretch', 'baseWeights': [60.0, 70.0, 80.0]},
-      {'name': 'Leg Press', 'notes': 'Feet shoulder width', 'baseWeights': [100.0, 120.0, 140.0]},
-      {'name': 'Leg Curl', 'notes': 'Control the negative', 'baseWeights': [40.0, 50.0, 60.0]},
-      {'name': 'Calf Raise', 'notes': 'Full stretch and contraction', 'baseWeights': [60.0, 80.0, 100.0]},
+      {'name': 'Squat', 'notes': 'Full depth, knees out', 'baseWeights': [10.0, 10.0, 10.0, 10.0]},
+      {'name': 'Romanian Deadlift', 'notes': 'Feel hamstring stretch', 'baseWeights': [10.0, 10.0, 10.0]},
+      {'name': 'Leg Press', 'notes': 'Feet shoulder width', 'baseWeights': [10.0, 10.0, 10.0]},
+      {'name': 'Leg Curl', 'notes': 'Control the negative', 'baseWeights': [10.0, 10.0, 10.0]},
+      {'name': 'Calf Raise', 'notes': 'Full stretch and contraction', 'baseWeights': [10.0, 10.0, 10.0]},
     ];
   }
 

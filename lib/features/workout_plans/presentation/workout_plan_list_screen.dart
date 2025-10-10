@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:workout_tracker/core/database/database_provider.dart';
 
 class WorkoutPlanListScreen extends ConsumerWidget {
   const WorkoutPlanListScreen({super.key});
@@ -19,6 +20,11 @@ class WorkoutPlanListScreen extends ConsumerWidget {
         title: const Text('Workout Plans'),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_forever),
+            onPressed: () => _showDeleteAndReseedDialog(context, ref),
+            tooltip: 'Delete & Reseed Database',
+          ),
           IconButton(
             icon: const Icon(Icons.sync),
             onPressed: () {
@@ -140,6 +146,88 @@ class WorkoutPlanListScreen extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+
+  void _showDeleteAndReseedDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete & Reseed Database'),
+          content: const Text(
+            'This will permanently delete ALL data including:\n\n'
+            '• All workout plans\n'
+            '• Your progress and completed sets\n'
+            '• Workout alternatives\n\n'
+            'The database will be reseeded with fresh 8-week program.\n\n'
+            'Are you sure you want to continue?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+
+                // Show loading indicator
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (BuildContext loadingContext) {
+                    return const Center(
+                      child: Card(
+                        child: Padding(
+                          padding: EdgeInsets.all(24.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(height: 16),
+                              Text('Deleting and reseeding...'),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+
+                try {
+                  final seeder = ref.read(databaseSeederProvider);
+                  await seeder.deleteAndReseed();
+
+                  if (context.mounted) {
+                    Navigator.of(context).pop(); // Close loading dialog
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Database deleted and reseeded successfully!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    Navigator.of(context).pop(); // Close loading dialog
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+              child: const Text('Delete & Reseed'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
