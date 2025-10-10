@@ -23,15 +23,16 @@ class DatabaseSeeder {
   Future<void> _seedWorkoutTemplates() async {
     const uuid = Uuid();
 
-    // Create a single workout plan
-    final planId = uuid.v4();
+    // Create a single workout plan with fixed ID to match mock UI
+    const planId = '1';  // Fixed ID to match WorkoutPlanListScreen mock data
     await _database.into(_database.workoutPlans).insert(
       WorkoutPlansCompanion.insert(
         id: planId,
-        name: 'Starting Strength Program',
+        name: 'Beginner Strength Training',  // Match the mock plan name
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       ),
+      mode: InsertMode.insertOrReplace,
     );
 
     // Create 8 weeks (2 phases of 4 weeks each)
