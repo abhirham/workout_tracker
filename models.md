@@ -3,54 +3,102 @@
 ## Architecture Overview
 
 This document defines the Firestore data structure for the workout tracking app, consisting of:
+
 - **React Admin Dashboard**: Manages workout templates (plans, weeks, days, workouts)
 - **Flutter Mobile App**: Syncs templates from Firestore, stores progress locally (Drift), and syncs progress back to Firestore
 
 ### Key Design Decisions
 
-1. **Nested Workout Plans**: Workout plans are stored as a single document with nested weeks/days/workouts arrays for simpler admin UI
+1. **Normalized Collections**: Global workouts, workout plans, weeks, and days are stored as separate collections/subcollections for scalability and partial updates
 2. **Separate User Progress**: User progress (completed sets) stored as individual documents in subcollections to avoid 1MB document size limits
 3. **Independent Exercise Tracking**: Each exercise (including alternatives) tracks progress independently with separate progressive overload histories
 4. **Offline-First Mobile**: Flutter app uses local Drift database, syncs incrementally with Firestore
 5. **Single Device, Single Admin**: Simplified conflict resolution (no multi-device sync conflicts, no multi-admin race conditions)
+6. **Data Retention**: Client-side cleanup keeps only last 2 cycles (16 weeks) of progress data
+7. **Batch Writes**: Progress syncs in batches of 5 sets to reduce costs by 80%
+8. **Custom Claims**: Admin role stored in Firebase Auth JWT (not Firestore) to avoid extra reads
 
 ---
 
 ## Collection 1: Global Workouts
 
-**Path**: `/global_workouts/list`
+**Path**: `/global_workouts/{workoutId}`
 
-**Purpose**: Provide autocomplete list of workout names for admin UI
+**Purpose**: Master library of all available exercises with metadata for autocomplete, filtering, and categorization
 
 **Structure**:
+
 ```typescript
 {
-  workouts: string[]  // Array of workout names
+  id: string;                   // URL-safe slug (e.g., "bench-press")
+  name: string;                 // Display name in Title Case (e.g., "Bench Press")
+  type: 'weight' | 'timer';     // Workout type
+  muscleGroups: string[];       // Primary muscles (e.g., ["chest", "triceps"])
+  equipment: string[];          // Required equipment (e.g., ["barbell", "bench"])
+  searchKeywords: string[];     // Lowercase tokens for autocomplete (e.g., ["bench", "press", "chest"])
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  isActive: boolean;            // Soft delete flag
 }
 ```
 
 **Example**:
+
 ```typescript
 {
-  workouts: [
-    "Bench Press",
-    "Squat",
-    "Deadlift",
-    "Pull-ups",
-    "Barbell Row",
-    "Overhead Press",
-    "Plank",
-    "Side Plank",
-    // ... ~20-200 workout names
-  ]
+  id: "bench-press",
+  name: "Bench Press",
+  type: "weight",
+  muscleGroups: ["chest", "triceps", "shoulders"],
+  equipment: ["barbell", "bench"],
+  searchKeywords: ["bench", "press", "chest", "barbell"],
+  createdAt: Timestamp(2025-01-01T00:00:00Z),
+  updatedAt: Timestamp(2025-01-01T00:00:00Z),
+  isActive: true
 }
 ```
 
+**Query Examples**:
+
+```typescript
+// Autocomplete search
+const workouts = await getDocs(
+  query(
+    collection(db, "global_workouts"),
+    where("searchKeywords", "array-contains", "ben"),
+    where("isActive", "==", true),
+    orderBy("name", "asc"),
+    limit(10)
+  )
+);
+
+// Filter by muscle group
+const chestWorkouts = await getDocs(
+  query(
+    collection(db, "global_workouts"),
+    where("muscleGroups", "array-contains", "chest"),
+    where("isActive", "==", true)
+  )
+);
+
+// Get all weight-based workouts
+const weightWorkouts = await getDocs(
+  query(
+    collection(db, "global_workouts"),
+    where("type", "==", "weight"),
+    where("isActive", "==", true),
+    orderBy("name", "asc")
+  )
+);
+```
+
 **Notes**:
-- Single document containing array of workout names
-- Used for autocomplete in React admin when adding workouts to plans
-- Names should be in Title Case (enforced by admin UI)
-- No metadata stored here (type, muscle groups, etc.)
+
+- Each workout is a separate document (atomic updates)
+- `searchKeywords` array enables efficient autocomplete via `array-contains`
+- `isActive` flag for soft deletes (never hard delete if used in plans)
+- Names must be in Title Case (enforced by admin UI)
+- `id` should be URL-safe slug generated from name (e.g., "Bench Press" → "bench-press")
 
 ---
 
@@ -58,118 +106,200 @@ This document defines the Firestore data structure for the workout tracking app,
 
 **Path**: `/workout_plans/{planId}`
 
-**Purpose**: Store workout program templates (admin-managed, synced to mobile users)
+**Purpose**: Store workout program metadata (plan header only, weeks/days stored in subcollections)
 
 **Structure**:
+
 ```typescript
 {
   id: string;
   name: string;
   description?: string;
+  totalWeeks: number;               // Total number of weeks in the plan
   createdAt: Timestamp;
   updatedAt: Timestamp;
-  weeks: Week[];
-}
-
-interface Week {
-  weekNumber: number;
-  name: string;
-  days: Day[];
-}
-
-interface Day {
-  dayNumber: number;
-  name: string;
-  workouts: Workout[];
-}
-
-interface Workout {
-  globalWorkoutName: string;        // Reference to global workout (e.g., "Bench Press")
-  type: 'weight' | 'timer';         // Determines UI rendering in mobile app
-  order: number;                    // Display order within the day
-  notes?: string;                   // Exercise instructions
-  baseWeights: number[] | null;     // Base weights for progressive overload (null for timer workouts)
-  targetReps: number | null;        // Target reps for the week (null for timer workouts)
-  restTimerSeconds: number | null;  // Rest between sets (45 for weight, null for timer)
-  workoutDurationSeconds: number | null;  // Duration for timer workouts (null for weight)
-  alternativeWorkouts: string[];    // List of alternative workout names
+  isActive: boolean;                // Soft delete flag
 }
 ```
 
-**Example**:
+**Subcollection: Weeks**
+
+**Path**: `/workout_plans/{planId}/weeks/{weekId}`
+
+**Structure**:
+
 ```typescript
 {
-  id: "1",
-  name: "Beginner Strength Training",
-  description: "8-week progressive overload program",
-  createdAt: Timestamp(2025-01-01T00:00:00Z),
-  updatedAt: Timestamp(2025-01-01T00:00:00Z),
-  weeks: [
+  id: string; // e.g., "week-1"
+  weekNumber: number; // 1, 2, 3, etc.
+  name: string; // e.g., "Week 1"
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+```
+
+**Subcollection: Days**
+
+**Path**: `/workout_plans/{planId}/weeks/{weekId}/days/{dayId}`
+
+**Structure**:
+
+```typescript
+{
+  id: string; // e.g., "day-1"
+  dayNumber: number; // 1, 2, 3, etc.
+  name: string; // e.g., "Chest & Triceps"
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+```
+
+**Subcollection: Workouts**
+
+**Path**: `/workout_plans/{planId}/weeks/{weekId}/days/{dayId}/workouts/{workoutId}`
+
+**Structure**:
+
+```typescript
+{
+  id: string;                       // e.g., "workout-1"
+  globalWorkoutId: string;          // Reference to global_workouts.id (e.g., "bench-press")
+  globalWorkoutName: string;        // Denormalized for display (e.g., "Bench Press")
+  type: 'weight' | 'timer';         // Denormalized from global workout
+  order: number;                    // Display order within the day (0, 1, 2...)
+  notes?: string;                   // Exercise instructions
+  baseWeights: number[] | null;     // Base weights for progressive overload (null for timer)
+  targetReps: number | null;        // Target reps for this workout (null for timer)
+  restTimerSeconds: number | null;  // Rest between sets (45 for weight, null for timer)
+  workoutDurationSeconds: number | null;  // Duration for timer workouts (null for weight)
+  alternativeWorkouts: string[];    // List of alternative workout IDs (e.g., ["dumbbell-press"])
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+```
+
+**Example Hierarchy**:
+
+```
+/workout_plans/beginner-strength
+  {
+    id: "beginner-strength",
+    name: "Beginner Strength Training",
+    description: "8-week progressive overload program",
+    totalWeeks: 8,
+    createdAt: Timestamp(2025-01-01T00:00:00Z),
+    updatedAt: Timestamp(2025-01-01T00:00:00Z),
+    isActive: true
+  }
+
+  /weeks/week-1
     {
+      id: "week-1",
       weekNumber: 1,
       name: "Week 1",
-      days: [
+      createdAt: Timestamp(2025-01-01T00:00:00Z),
+      updatedAt: Timestamp(2025-01-01T00:00:00Z)
+    }
+
+    /days/day-1
+      {
+        id: "day-1",
+        dayNumber: 1,
+        name: "Chest & Triceps",
+        createdAt: Timestamp(2025-01-01T00:00:00Z),
+        updatedAt: Timestamp(2025-01-01T00:00:00Z)
+      }
+
+      /workouts/workout-1
         {
-          dayNumber: 1,
-          name: "Chest & Triceps",
-          workouts: [
-            {
-              globalWorkoutName: "Bench Press",
-              type: "weight",
-              order: 0,
-              notes: "Focus on controlled eccentric",
-              baseWeights: [10, 10, 10, 10],  // 4 sets, all at 10kg base
-              targetReps: 12,  // Week 1 = 12 reps
-              restTimerSeconds: 45,
-              workoutDurationSeconds: null,
-              alternativeWorkouts: ["Dumbbell Press", "Incline Press"]
-            },
-            {
-              globalWorkoutName: "Incline Dumbbell Press",
-              type: "weight",
-              order: 1,
-              notes: "30-45 degree angle",
-              baseWeights: [10, 10, 10],  // 3 sets
-              targetReps: 12,
-              restTimerSeconds: 45,
-              workoutDurationSeconds: null,
-              alternativeWorkouts: ["Incline Barbell Press"]
-            },
-            {
-              globalWorkoutName: "Plank",
-              type: "timer",
-              order: 2,
-              notes: "Hold steady, no sagging",
-              baseWeights: null,
-              targetReps: null,
-              restTimerSeconds: null,  // No rest timer for timer workouts
-              workoutDurationSeconds: 60,  // 60 seconds
-              alternativeWorkouts: ["Side Plank"]
-            }
-          ]
-        },
-        {
-          dayNumber: 2,
-          name: "Back & Biceps",
-          workouts: [
-            // ... more workouts
-          ]
+          id: "workout-1",
+          globalWorkoutId: "bench-press",
+          globalWorkoutName: "Bench Press",
+          type: "weight",
+          order: 0,
+          notes: "Focus on controlled eccentric",
+          baseWeights: [10, 10, 10, 10],  // 4 sets
+          targetReps: 12,  // Week 1 target
+          restTimerSeconds: 45,
+          workoutDurationSeconds: null,
+          alternativeWorkouts: ["dumbbell-press", "incline-press"],
+          createdAt: Timestamp(2025-01-01T00:00:00Z),
+          updatedAt: Timestamp(2025-01-01T00:00:00Z)
         }
-      ]
-    },
+
+      /workouts/workout-2
+        {
+          id: "workout-2",
+          globalWorkoutId: "plank",
+          globalWorkoutName: "Plank",
+          type: "timer",
+          order: 1,
+          notes: "Hold steady, no sagging",
+          baseWeights: null,
+          targetReps: null,
+          restTimerSeconds: null,
+          workoutDurationSeconds: 60,
+          alternativeWorkouts: ["side-plank"],
+          createdAt: Timestamp(2025-01-01T00:00:00Z),
+          updatedAt: Timestamp(2025-01-01T00:00:00Z)
+        }
+
+    /days/day-2
+      { ... }
+
+  /weeks/week-2
     {
+      id: "week-2",
       weekNumber: 2,
       name: "Week 2",
-      days: [
-        // ... same structure, different targetReps (9 reps for week 2)
-      ]
+      createdAt: Timestamp(2025-01-01T00:00:00Z),
+      updatedAt: Timestamp(2025-01-01T00:00:00Z)
     }
-    // ... weeks 3-8
-  ]
-}
+    /days/...
+      /workouts/workout-1
+        {
+          ...
+          targetReps: 9,  // Week 2 target (different from Week 1)
+          ...
+        }
+```
+
+**Query Examples**:
+
+```typescript
+// Get plan metadata
+const plan = await getDoc(doc(db, "workout_plans", "beginner-strength"));
+
+// Get all weeks for a plan
+const weeks = await getDocs(
+  query(
+    collection(db, "workout_plans/beginner-strength/weeks"),
+    orderBy("weekNumber", "asc")
+  )
+);
+
+// Get all days for Week 1
+const days = await getDocs(
+  query(
+    collection(db, "workout_plans/beginner-strength/weeks/week-1/days"),
+    orderBy("dayNumber", "asc")
+  )
+);
+
+// Get all workouts for Day 1
+const workouts = await getDocs(
+  query(
+    collection(
+      db,
+      "workout_plans/beginner-strength/weeks/week-1/days/day-1/workouts"
+    ),
+    orderBy("order", "asc")
+  )
+);
 ```
 
 **Progressive Overload Formula**:
+
 ```
 Week cycle (every 4 weeks):
 - Week 1: 12 reps
@@ -185,10 +315,14 @@ Weight progression:
 ```
 
 **Notes**:
-- Each plan is a single document (nested structure)
-- Document size: ~40KB for 8 weeks × 4 days × 6 workouts (well under 1MB limit)
-- Mobile app downloads entire plan on first sync, then checks `updatedAt` for changes
-- Admin updates are atomic (entire document is updated via transaction)
+
+- Normalized subcollection structure (plan → weeks → days → workouts)
+- Enables partial updates (e.g., update Week 1 without touching Week 2)
+- Scales to 52+ week programs without hitting 1MB limits
+- Mobile app can cache only current week (reduces bandwidth/storage)
+- Each subcollection document is independently updated (no monolithic writes)
+- `targetReps` set per workout (allows flexibility - different exercises can have different rep targets in same week)
+- `globalWorkoutId` is the source of truth, `globalWorkoutName` is denormalized for display
 
 ---
 
@@ -196,40 +330,53 @@ Weight progression:
 
 **Path**: `/users/{userId}`
 
-**Purpose**: Store user profile metadata (no progress data stored here)
+**Purpose**: Store user profile metadata and sync timestamps
 
 **Structure**:
+
 ```typescript
 {
-  uid: string;              // Firebase Auth UID
+  uid: string; // Firebase Auth UID (redundant with doc ID, but useful)
   displayName: string;
   email: string;
-  role: 'user' | 'admin';
-  currentPlanId: string;    // Current workout plan
+  currentPlanId: string; // Current workout plan
   currentWeekNumber: number;
   currentDayNumber: number;
   createdAt: Timestamp;
+  updatedAt: Timestamp;
+  sync: {
+    // Embedded sync metadata
+    lastTemplateSync: Timestamp; // Last time workout plans were downloaded
+    lastProgressSync: Timestamp; // Last time progress was synced
+  }
 }
 ```
 
 **Example**:
+
 ```typescript
 {
   uid: "abc123xyz789",
   displayName: "John Doe",
   email: "john@example.com",
-  role: "user",
-  currentPlanId: "1",
+  currentPlanId: "beginner-strength",
   currentWeekNumber: 1,
   currentDayNumber: 1,
-  createdAt: Timestamp(2025-01-01T00:00:00Z)
+  createdAt: Timestamp(2025-01-01T00:00:00Z),
+  updatedAt: Timestamp(2025-01-15T14:30:00Z),
+  sync: {
+    lastTemplateSync: Timestamp(2025-01-15T12:00:00Z),
+    lastProgressSync: Timestamp(2025-01-15T14:30:00Z)
+  }
 }
 ```
 
 **Notes**:
+
 - User document is created on first login (Firebase Auth trigger or app initialization)
-- `role: 'admin'` is set manually in Firestore Console for admin users
-- Progress is NOT stored in this document (stored in subcollections instead)
+- Admin role is stored in Firebase Auth custom claims (NOT in this document)
+- Progress is NOT stored in this document (stored in subcollections)
+- Sync metadata embedded here (no separate collection) for atomic reads
 
 ---
 
@@ -240,29 +387,30 @@ Weight progression:
 **Purpose**: Track individual completed sets (each set is a separate document)
 
 **Structure**:
+
 ```typescript
 {
-  id: string;                    // UUID v4
-  userId: string;                // Firebase Auth UID
-  planId: string;                // Workout plan ID
+  id: string; // UUID v4
+  // userId removed - redundant (already in path /user_progress/{userId}/)
+  planId: string; // Workout plan ID
   weekNumber: number;
   dayNumber: number;
-  workoutName: string;           // Actual exercise performed (e.g., "Bench Press" or "Dumbbell Press")
-  setNumber: number;             // Set number within the workout (1, 2, 3, 4)
-  weight: number | null;         // Weight in kg (null for timer workouts)
-  reps: number | null;           // Reps completed (null for timer workouts)
-  duration: number | null;       // Duration in seconds (null for weight workouts)
-  completedAt: Timestamp;        // When the set was completed
-  syncedAt: Timestamp;           // Server timestamp for conflict resolution
+  workoutName: string; // Actual exercise performed (e.g., "Bench Press" or "Dumbbell Press")
+  setNumber: number; // Set number within the workout (1, 2, 3, 4)
+  weight: number | null; // Weight in kg (null for timer workouts)
+  reps: number | null; // Reps completed (null for timer workouts)
+  duration: number | null; // Duration in seconds (null for weight workouts)
+  completedAt: Timestamp; // When the set was completed
+  syncedAt: Timestamp; // Server timestamp for sync tracking
 }
 ```
 
 **Example (Weight Workout)**:
+
 ```typescript
 {
   id: "uuid-v4-abc123",
-  userId: "abc123xyz789",
-  planId: "1",
+  planId: "beginner-strength",
   weekNumber: 1,
   dayNumber: 1,
   workoutName: "Bench Press",
@@ -276,11 +424,11 @@ Weight progression:
 ```
 
 **Example (Timer Workout)**:
+
 ```typescript
 {
   id: "uuid-v4-def456",
-  userId: "abc123xyz789",
-  planId: "1",
+  planId: "beginner-strength",
   weekNumber: 1,
   dayNumber: 1,
   workoutName: "Plank",
@@ -294,11 +442,11 @@ Weight progression:
 ```
 
 **Example (Using Alternative Exercise)**:
+
 ```typescript
 {
   id: "uuid-v4-ghi789",
-  userId: "abc123xyz789",
-  planId: "1",
+  planId: "beginner-strength",
   weekNumber: 1,
   dayNumber: 1,
   workoutName: "Dumbbell Press",  // User chose alternative instead of "Bench Press"
@@ -318,10 +466,10 @@ Weight progression:
 const sets = await getDocs(
   query(
     collection(db, `user_progress/${userId}/completed_sets`),
-    where('planId', '==', '1'),
-    where('weekNumber', '==', 1),
-    where('dayNumber', '==', 1),
-    orderBy('completedAt', 'desc')
+    where("planId", "==", "1"),
+    where("weekNumber", "==", 1),
+    where("dayNumber", "==", 1),
+    orderBy("completedAt", "desc")
   )
 );
 
@@ -330,9 +478,9 @@ const sets = await getDocs(
 const lastSet = await getDocs(
   query(
     collection(db, `user_progress/${userId}/completed_sets`),
-    where('workoutName', '==', 'Bench Press'),
-    where('setNumber', '==', 1),
-    orderBy('completedAt', 'desc'),
+    where("workoutName", "==", "Bench Press"),
+    where("setNumber", "==", 1),
+    orderBy("completedAt", "desc"),
     limit(1)
   )
 );
@@ -341,52 +489,25 @@ const lastSet = await getDocs(
 const benchPressSets = await getDocs(
   query(
     collection(db, `user_progress/${userId}/completed_sets`),
-    where('planId', '==', '1'),
-    where('weekNumber', '==', 1),
-    where('dayNumber', '==', 1),
-    where('workoutName', '==', 'Bench Press'),
-    orderBy('setNumber', 'asc')
+    where("planId", "==", "1"),
+    where("weekNumber", "==", 1),
+    where("dayNumber", "==", 1),
+    where("workoutName", "==", "Bench Press"),
+    orderBy("setNumber", "asc")
   )
 );
 ```
 
 **Notes**:
+
 - Each completed set is a separate document (avoids 1MB limit)
-- `syncedAt` is set by server timestamp (used for conflict resolution if needed)
+- `userId` removed from document (redundant - already in subcollection path)
+- `syncedAt` is set by server timestamp (used for incremental sync)
 - Each exercise tracks independently - "Bench Press" and "Dumbbell Press" have separate progressive overload histories
 - `workoutName` stores the actual exercise performed, regardless of what was prescribed in the plan template
 - Subcollection path ensures user data isolation
-
----
-
-## Collection 5: Sync Metadata
-
-**Path**: `/sync_metadata/{userId}`
-
-**Purpose**: Track last sync timestamps to enable incremental sync
-
-**Structure**:
-```typescript
-{
-  userId: string;
-  lastTemplateSync: Timestamp;  // Last time workout plans were downloaded
-  lastProgressSync: Timestamp;  // Last time progress was synced
-}
-```
-
-**Example**:
-```typescript
-{
-  userId: "abc123xyz789",
-  lastTemplateSync: Timestamp(2025-01-15T12:00:00Z),
-  lastProgressSync: Timestamp(2025-01-15T14:30:00Z)
-}
-```
-
-**Notes**:
-- Used by mobile app to determine if templates need re-downloading
-- Check `workout_plans.updatedAt > lastTemplateSync` before downloading
-- Used for progress sync to upload only new `completed_sets` since last sync
+- **Data Retention**: Client-side cleanup deletes sets older than 2 cycles (plan-dependent duration)
+- **Batch Writes**: Mobile app batches 5 sets per Firestore write to reduce costs by 80%
 
 ---
 
@@ -402,14 +523,13 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Helper: Check if user is admin
+    // Helper: Check if user is admin (uses custom claims, NOT Firestore read)
     function isAdmin() {
-      return isAuthenticated() &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isAuthenticated() && request.auth.token.admin == true;
     }
 
     // Global workouts - read all, write admin only
-    match /global_workouts/{document=**} {
+    match /global_workouts/{workoutId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
@@ -418,6 +538,24 @@ service cloud.firestore {
     match /workout_plans/{planId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
+
+      // Weeks subcollection
+      match /weeks/{weekId} {
+        allow read: if isAuthenticated();
+        allow write: if isAdmin();
+
+        // Days subcollection
+        match /days/{dayId} {
+          allow read: if isAuthenticated();
+          allow write: if isAdmin();
+
+          // Workouts subcollection
+          match /workouts/{workoutId} {
+            allow read: if isAuthenticated();
+            allow write: if isAdmin();
+          }
+        }
+      }
     }
 
     // User profiles - read own or admin, write own only
@@ -432,13 +570,20 @@ service cloud.firestore {
     match /user_progress/{userId}/{document=**} {
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
     }
-
-    // Sync metadata - user-specific
-    match /sync_metadata/{userId} {
-      allow read, write: if isAuthenticated() && request.auth.uid == userId;
-    }
   }
 }
+```
+
+**Setting Admin Custom Claims (Admin SDK)**:
+
+```typescript
+// Run this server-side or via Firebase CLI
+import * as admin from "firebase-admin";
+
+await admin.auth().setCustomUserClaims(userId, { admin: true });
+
+// Force token refresh on client
+await auth.currentUser?.getIdToken(true);
 ```
 
 ---
@@ -479,32 +624,62 @@ service cloud.firestore {
         { "fieldPath": "workoutName", "order": "ASCENDING" },
         { "fieldPath": "setNumber", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "completed_sets",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "syncedAt", "order": "DESCENDING" }]
+    },
+    {
+      "collectionGroup": "global_workouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "global_workouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "searchKeywords", "order": "ASCENDING" },
+        { "fieldPath": "isActive", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "workouts",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "order", "order": "ASCENDING" }]
     }
   ]
 }
 ```
 
-**Note**: Firestore will prompt you to create these indexes when you first run queries that require them.
+**Note**: Firestore will auto-prompt you to create these indexes when you first run queries. You can also deploy via `firebase deploy --only firestore:indexes`.
 
 ---
 
 ## Data Validation Rules
 
 ### Workout Names (Title Case)
+
 - All workout names should be in Title Case: "Bench Press", "Squat", "Deadlift"
 - Admin UI should auto-format input to Title Case
 - Prevents case-sensitivity issues in Firestore queries
 
 ### Workout Type Validation
+
 - `type: 'weight'` → `baseWeights` must be non-null, `workoutDurationSeconds` must be null
 - `type: 'timer'` → `baseWeights` must be null, `workoutDurationSeconds` must be non-null
 
 ### Progressive Overload Constraints
+
 - `baseWeights` array length determines number of sets
 - Each element represents the base weight for that set in Phase 1, Week 1
 - Mobile app calculates actual suggested weight using formula
 
 ### Completed Sets Constraints
+
 - Weight workouts: `weight` and `reps` must be non-null, `duration` must be null
 - Timer workouts: `duration` must be non-null, `weight` and `reps` must be null
 
@@ -514,34 +689,51 @@ service cloud.firestore {
 
 ### Template Sync (One-Way: Firestore → Mobile)
 
-1. Mobile app checks `sync_metadata/{userId}.lastTemplateSync`
+1. Mobile app checks `users/{userId}.sync.lastTemplateSync`
 2. Query `workout_plans` where `updatedAt > lastTemplateSync`
-3. Download changed plans (usually just 1 plan)
+3. For each changed plan:
+   - Download plan metadata
+   - Download all weeks subcollection
+   - Download all days for each week
+   - Download all workouts for each day
 4. Replace local Drift database with Firestore data
-5. Update `lastTemplateSync` to current timestamp
+5. Update `users/{userId}.sync.lastTemplateSync` to current timestamp
+
+**Optimization**: Only sync current week initially, lazy-load other weeks on demand.
 
 ### Progress Sync (Bi-Directional)
 
-**Upload (Mobile → Firestore)**:
-1. Mobile app maintains a `sync_queue` table in Drift
-2. When user completes a set, save to Drift and add to `sync_queue`
-3. When online, iterate through `sync_queue`:
-   - Upload each `completed_set` to Firestore subcollection
+**Upload (Mobile → Firestore) - BATCHED**:
+
+1. Mobile app buffers completed sets in memory (max 5 sets)
+2. When buffer reaches 5 sets OR 60 seconds elapsed OR app pauses:
+   - Batch write all pending sets to Firestore in single transaction
    - Set `syncedAt` to server timestamp
-   - Remove from `sync_queue` on success
-4. Update `lastProgressSync` to current timestamp
+   - Clear buffer on success
+3. Update `users/{userId}.sync.lastProgressSync` to current timestamp
+4. Run cleanup: delete local/remote sets older than 2 cycles
 
 **Download (Firestore → Mobile)**:
+
 1. Query `completed_sets` where `syncedAt > lastProgressSync`
 2. For each remote set:
    - Check if exists locally (by `id`)
    - If not exists: insert into Drift
    - If exists and remote `syncedAt` > local `syncedAt`: update in Drift
-3. Update `lastProgressSync` to current timestamp
+3. Update `users/{userId}.sync.lastProgressSync` to current timestamp
 
 **Conflict Resolution**:
+
 - Since there's only 1 device per user, conflicts are rare
 - If conflict occurs: last-write-wins (compare `syncedAt` timestamps)
+
+**Data Retention (Client-Side Cleanup)**:
+
+1. Calculate retention window based on plan duration: `2 cycles = 2 × plan.totalWeeks × 7 days`
+2. On each sync, delete local completed_sets where `completedAt < now - retention_window`
+3. Batch delete remote completed_sets where `completedAt < now - retention_window`
+4. Example: 8-week plan → 16 weeks retention; 12-week plan → 24 weeks retention
+5. Keeps storage predictable
 
 ---
 
@@ -550,35 +742,49 @@ service cloud.firestore {
 ```typescript
 // src/lib/types/models.ts
 
-export type WorkoutType = 'weight' | 'timer';
-export type UserRole = 'user' | 'admin';
+export type WorkoutType = "weight" | "timer";
 
-export interface GlobalWorkoutsList {
-  workouts: string[];
+export interface GlobalWorkout {
+  id: string;
+  name: string;
+  type: WorkoutType;
+  muscleGroups: string[];
+  equipment: string[];
+  searchKeywords: string[];
+  createdAt: Date;
+  updatedAt: Date;
+  isActive: boolean;
 }
 
 export interface WorkoutPlan {
   id: string;
   name: string;
   description?: string;
+  totalWeeks: number;
   createdAt: Date;
   updatedAt: Date;
-  weeks: Week[];
+  isActive: boolean;
 }
 
 export interface Week {
+  id: string;
   weekNumber: number;
   name: string;
-  days: Day[];
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface Day {
+  id: string;
   dayNumber: number;
   name: string;
-  workouts: Workout[];
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface Workout {
+  id: string;
+  globalWorkoutId: string;
   globalWorkoutName: string;
   type: WorkoutType;
   order: number;
@@ -588,22 +794,28 @@ export interface Workout {
   restTimerSeconds: number | null;
   workoutDurationSeconds: number | null;
   alternativeWorkouts: string[];
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface User {
   uid: string;
   displayName: string;
   email: string;
-  role: UserRole;
   currentPlanId: string;
   currentWeekNumber: number;
   currentDayNumber: number;
   createdAt: Date;
+  updatedAt: Date;
+  sync: {
+    lastTemplateSync: Date;
+    lastProgressSync: Date;
+  };
 }
 
 export interface CompletedSet {
   id: string;
-  userId: string;
+  // userId removed - derived from subcollection path
   planId: string;
   weekNumber: number;
   dayNumber: number;
@@ -615,36 +827,50 @@ export interface CompletedSet {
   completedAt: Date;
   syncedAt: Date;
 }
-
-export interface SyncMetadata {
-  userId: string;
-  lastTemplateSync: Date;
-  lastProgressSync: Date;
-}
 ```
 
 ---
 
 ## Flutter Model Updates Required
 
-### Files to Update:
+### Major Changes from Current Local-Only Schema:
 
-1. **lib/shared/models/completed_set.dart**
-   - Change to use single `workoutName` field (remove dual field approach)
-   - Add `syncedAt: DateTime?` field
+1. **Global Workouts**: Add metadata fields
 
-2. **lib/core/database/app_database.dart**
-   - Update `completed_sets` table to use `workoutName` column
-   - Add `syncedAt` column to `completed_sets`
-   - Remove `workout_alternatives` table (no longer needed)
+   - `muscleGroups: List<String>`
+   - `equipment: List<String>`
+   - `searchKeywords: List<String>`
+   - `isActive: bool`
 
-3. **lib/features/workouts/data/completed_set_repository.dart**
-   - Update queries to use `workoutName`
-   - Update progressive overload logic to query by actual exercise name
-   - Add sync queue logic
+2. **Workout Plans**: Normalize to separate tables
 
-4. **Remove lib/features/workouts/data/workout_alternative_repository.dart**
-   - No longer needed - alternatives are selected from plan template's `alternativeWorkouts` array
+   - Move `weeks` from nested array to `weeks` table with `planId` foreign key
+   - Move `days` from nested array to `days` table with `weekId` foreign key
+   - Move `workouts` from nested array to `workouts` table with `dayId` foreign key
+   - Add `targetReps` to individual `workouts` table (per-workout flexibility)
+   - Add `isActive` to `workout_plans` table
+
+3. **Workouts**: Add global workout reference
+
+   - Add `globalWorkoutId` column (references `global_workouts.id`)
+   - Rename `name` to `globalWorkoutName` (denormalized from global workout)
+   - Store `alternativeWorkouts` as JSON array of globalWorkoutIds
+
+4. **Users**: Embed sync metadata
+
+   - Add `updatedAt` column
+   - Add `syncLastTemplateSync` column (replaces separate sync_metadata table)
+   - Add `syncLastProgressSync` column
+
+5. **Completed Sets**: Remove redundant userId
+
+   - Remove `userId` column (already in Firestore path, keep in local DB for querying)
+   - Keep `workoutName` (stores actual exercise performed)
+
+6. **Sync Service**: Implement batching and cleanup
+   - Buffer up to 5 sets before batch write
+   - Auto-flush every 60 seconds or on app pause
+   - Client-side cleanup of sets older than 2 cycles (plan-dependent: 2 × totalWeeks)
 
 ---
 
@@ -664,13 +890,13 @@ export interface SyncMetadata {
 
 ## Document Size Estimates
 
-| Collection | Documents per User | Avg Size per Doc | Total Size |
-|------------|-------------------|------------------|------------|
-| global_workouts | 1 (shared) | 2KB | 2KB |
-| workout_plans | 1 (shared) | 40KB | 40KB |
-| users | 1 | 0.5KB | 0.5KB |
-| completed_sets | 768 per cycle | 0.2KB | 154KB per cycle |
-| sync_metadata | 1 | 0.2KB | 0.2KB |
+| Collection      | Documents per User | Avg Size per Doc | Total Size      |
+| --------------- | ------------------ | ---------------- | --------------- |
+| global_workouts | 1 (shared)         | 2KB              | 2KB             |
+| workout_plans   | 1 (shared)         | 40KB             | 40KB            |
+| users           | 1                  | 0.5KB            | 0.5KB           |
+| completed_sets  | 768 per cycle      | 0.2KB            | 154KB per cycle |
+| sync_metadata   | 1                  | 0.2KB            | 0.2KB           |
 
 **Total for 1 user after 1 cycle (8 weeks)**: ~197KB
 **Total after 1 year (6 cycles)**: ~967KB ✅ Under 1MB limit
@@ -683,30 +909,45 @@ export interface SyncMetadata {
 ## Cost Estimates (Firestore Pricing)
 
 **Assumptions**:
+
 - 100 active users
 - Each user syncs daily
-- 1 template download per week
+- 1 template download per week (plan + current week only)
 - 30 completed sets per day
 
-**Reads**:
-- Template sync: 100 users × 1 read/week × 4 weeks = 400 reads/month
+**Reads** (with optimizations):
+
+- Template sync: 100 users × 5 reads/week × 4 weeks = 2,000 reads/month
+  - (1 plan doc + 1 week doc + 1 day doc + 2 workout docs)
 - Progress download: 100 users × 1 read/day × 30 days = 3,000 reads/month
-- **Total reads**: ~3,400/month
+- **Total reads**: ~5,000/month
 
-**Writes**:
-- Progress upload: 100 users × 30 sets/day × 30 days = 90,000 writes/month
-- **Total writes**: ~90,000/month
+**Writes** (with batch optimization):
 
-**Storage**:
-- 100 users × 200KB = 20MB
+- Progress upload: 90,000 sets ÷ 5 (batching) = 18,000 writes/month
+- **Total writes**: ~18,000/month
+
+**Storage** (with retention policy):
+
+- 100 users × 400KB (capped at 2 cycles) = 40MB
+- Global workouts: 200 workouts × 1KB = 200KB
+- Workout plans: 10 plans × 100KB = 1MB
+- **Total storage**: ~41MB
 
 **Cost** (as of 2025):
-- Reads: 3,400 × $0.06/100k = $0.002
-- Writes: 90,000 × $0.18/100k = $0.16
-- Storage: 20MB × $0.18/GB = $0.004
-- **Total**: ~$0.17/month
 
-**Note**: First 50k reads, 20k writes, 1GB storage are free daily.
+- Reads: 5,000 × $0.06/100k = $0.003
+- Writes: 18,000 × $0.18/100k = $0.03
+- Storage: 41MB × $0.18/GB = $0.007
+- **Total**: ~$0.04/month
+
+**Savings from optimizations**:
+
+- Batch writes: 80% reduction (was $0.16, now $0.03)
+- Data retention: 50% reduction in storage growth
+- Lazy-loading weeks: 50% reduction in template sync reads
+
+**Note**: First 50k reads, 20k writes, 1GB storage are free daily. This entire app would run on free tier until ~1000 active users.
 
 ---
 
