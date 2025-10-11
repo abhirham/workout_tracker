@@ -5,6 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:workout_tracker/core/router/app_router.dart';
 import 'package:workout_tracker/core/database/database_provider.dart';
 import 'package:workout_tracker/firebase_options.dart';
+import 'package:workout_tracker/features/sync/services/auth_service.dart';
+import 'package:workout_tracker/features/sync/services/sync_queue_processor.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,6 +25,27 @@ void main() async {
     await seeder.seedIfNeeded();
   } catch (e, stackTrace) {
     debugPrint('Error seeding database: $e');
+    debugPrint('Stack trace: $stackTrace');
+  }
+
+  // Initialize authentication and sync services
+  try {
+    // Ensure user is authenticated (anonymous auth)
+    final authService = container.read(authServiceProvider);
+    await authService.ensureAuthenticated();
+    debugPrint('User authenticated: ${authService.currentUserId}');
+
+    // Initialize sync queue processor
+    final syncProcessor = container.read(syncQueueProcessorProvider);
+    syncProcessor.start();
+
+    // Trigger initial full sync in background (non-blocking)
+    syncProcessor.fullSync().catchError((e, stackTrace) {
+      debugPrint('Error in initial sync: $e');
+      debugPrint('Stack trace: $stackTrace');
+    });
+  } catch (e, stackTrace) {
+    debugPrint('Error initializing sync services: $e');
     debugPrint('Stack trace: $stackTrace');
   }
 
