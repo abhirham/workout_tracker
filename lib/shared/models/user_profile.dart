@@ -8,7 +8,14 @@ class UserProfile with _$UserProfile {
   const factory UserProfile({
     required String userId,
     required String displayName,
+    String? email,
     String? currentPlanId,
+    int? currentWeekNumber,
+    int? currentDayNumber,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    DateTime? syncLastTemplateSync,  // Timestamp of last template sync from Firestore
+    DateTime? syncLastProgressSync,  // Timestamp of last progress sync with Firestore
   }) = _UserProfile;
 
   factory UserProfile.fromJson(Map<String, dynamic> json) =>

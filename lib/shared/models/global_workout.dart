@@ -16,7 +16,12 @@ class GlobalWorkout with _$GlobalWorkout {
     required String id,
     required String name,
     required WorkoutType type,
+    required List<String> muscleGroups,  // Primary muscle groups (e.g., ["chest", "triceps"])
+    required List<String> equipment,  // Required equipment (e.g., ["barbell", "bench"])
+    required List<String> searchKeywords,  // Lowercase tokens for autocomplete
+    @Default(true) bool isActive,  // Soft delete flag
     required DateTime createdAt,
+    required DateTime updatedAt,
   }) = _GlobalWorkout;
 
   factory GlobalWorkout.fromJson(Map<String, dynamic> json) =>

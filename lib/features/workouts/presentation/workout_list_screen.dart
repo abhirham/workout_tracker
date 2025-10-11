@@ -343,6 +343,9 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     final currentWorkout = workouts[currentWorkoutIndex];
     const uuid = Uuid();
 
+    // Determine the actual workout name (use alternative name if selected, otherwise original name)
+    final workoutName = selectedAlternativeName ?? (currentWorkout['name'] as String);
+
     // Handle timer vs weight workouts
     final CompletedSet completedSet;
     if (currentWorkoutType == WorkoutType.timer) {
@@ -353,12 +356,14 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
         weekId: widget.weekId,
         dayId: widget.dayId,
         workoutId: currentWorkout['id'] as String,
+        workoutName: workoutName,  // Actual exercise name performed
         setNumber: set['setNumber'] as int,
         weight: null,
         reps: null,
         duration: set['actualDuration'] as int?,
-        workoutAlternativeId: selectedAlternativeId, // null if original workout
         completedAt: DateTime.now(),
+        syncedAt: null,  // Not yet synced to Firestore
+        workoutAlternativeId: selectedAlternativeId, // null if original workout
       );
     } else {
       completedSet = CompletedSet(
@@ -368,12 +373,14 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
         weekId: widget.weekId,
         dayId: widget.dayId,
         workoutId: currentWorkout['id'] as String,
+        workoutName: workoutName,  // Actual exercise name performed
         setNumber: set['setNumber'] as int,
         weight: set['actualWeight'] as double?,
         reps: set['actualReps'] as int?,
         duration: null,
-        workoutAlternativeId: selectedAlternativeId, // null if original workout
         completedAt: DateTime.now(),
+        syncedAt: null,  // Not yet synced to Firestore
+        workoutAlternativeId: selectedAlternativeId, // null if original workout
       );
     }
 

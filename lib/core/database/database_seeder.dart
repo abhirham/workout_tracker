@@ -96,6 +96,8 @@ class DatabaseSeeder {
           final workoutId = '${dayId}_$globalWorkoutId';
 
           final baseWeights = workout['baseWeights'] as List<double>;
+          final baseWeightsJson = baseWeights.join(',');
+          final targetReps = _getTargetReps(weekNum);
 
           await _database.into(_database.workouts).insert(
             WorkoutsCompanion.insert(
@@ -106,7 +108,13 @@ class DatabaseSeeder {
               name: workout['name'] as String,
               order: i,
               notes: Value(workout['notes'] as String?),
-              defaultSets: baseWeights.length,
+              baseWeights: Value(baseWeightsJson),  // Store as JSON
+              targetReps: Value(targetReps),  // Week-specific target reps
+              restTimerSeconds: const Value(45),  // Default 45 seconds rest
+              workoutDurationSeconds: const Value(null),  // Null for weight workouts
+              alternativeWorkouts: const Value(null),  // No admin-defined alternatives yet
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
             ),
             mode: InsertMode.insertOrReplace,
           );
@@ -146,47 +154,211 @@ class DatabaseSeeder {
 
   /// Seed global workouts library
   Future<void> _seedGlobalWorkouts() async {
+    final now = DateTime.now();
     final globalWorkouts = [
       // Day 1: Chest & Triceps
-      {'id': 'bench-press', 'name': 'Bench Press', 'type': 'weight'},
-      {'id': 'incline-dumbbell-press', 'name': 'Incline Dumbbell Press', 'type': 'weight'},
-      {'id': 'cable-flyes', 'name': 'Cable Flyes', 'type': 'weight'},
-      {'id': 'tricep-dips', 'name': 'Tricep Dips', 'type': 'weight'},
-      {'id': 'tricep-pushdown', 'name': 'Tricep Pushdown', 'type': 'weight'},
+      {
+        'id': 'bench-press',
+        'name': 'Bench Press',
+        'type': 'weight',
+        'muscleGroups': ['chest', 'triceps'],
+        'equipment': ['barbell', 'bench'],
+        'searchKeywords': ['bench', 'press', 'chest', 'barbell']
+      },
+      {
+        'id': 'incline-dumbbell-press',
+        'name': 'Incline Dumbbell Press',
+        'type': 'weight',
+        'muscleGroups': ['chest', 'shoulders'],
+        'equipment': ['dumbbells', 'bench'],
+        'searchKeywords': ['incline', 'dumbbell', 'press', 'chest']
+      },
+      {
+        'id': 'cable-flyes',
+        'name': 'Cable Flyes',
+        'type': 'weight',
+        'muscleGroups': ['chest'],
+        'equipment': ['cable'],
+        'searchKeywords': ['cable', 'fly', 'flyes', 'chest']
+      },
+      {
+        'id': 'tricep-dips',
+        'name': 'Tricep Dips',
+        'type': 'weight',
+        'muscleGroups': ['triceps', 'chest'],
+        'equipment': ['dip-bar'],
+        'searchKeywords': ['tricep', 'dip', 'dips']
+      },
+      {
+        'id': 'tricep-pushdown',
+        'name': 'Tricep Pushdown',
+        'type': 'weight',
+        'muscleGroups': ['triceps'],
+        'equipment': ['cable'],
+        'searchKeywords': ['tricep', 'pushdown', 'cable']
+      },
 
       // Day 2: Back & Biceps
-      {'id': 'deadlift', 'name': 'Deadlift', 'type': 'weight'},
-      {'id': 'pull-ups', 'name': 'Pull-ups', 'type': 'weight'},
-      {'id': 'barbell-row', 'name': 'Barbell Row', 'type': 'weight'},
-      {'id': 'lat-pulldown', 'name': 'Lat Pulldown', 'type': 'weight'},
-      {'id': 'barbell-curl', 'name': 'Barbell Curl', 'type': 'weight'},
-      {'id': 'hammer-curl', 'name': 'Hammer Curl', 'type': 'weight'},
+      {
+        'id': 'deadlift',
+        'name': 'Deadlift',
+        'type': 'weight',
+        'muscleGroups': ['back', 'hamstrings', 'glutes'],
+        'equipment': ['barbell'],
+        'searchKeywords': ['deadlift', 'dead', 'lift', 'back']
+      },
+      {
+        'id': 'pull-ups',
+        'name': 'Pull-ups',
+        'type': 'weight',
+        'muscleGroups': ['back', 'biceps'],
+        'equipment': ['pull-up-bar'],
+        'searchKeywords': ['pull', 'up', 'pullup', 'back']
+      },
+      {
+        'id': 'barbell-row',
+        'name': 'Barbell Row',
+        'type': 'weight',
+        'muscleGroups': ['back'],
+        'equipment': ['barbell'],
+        'searchKeywords': ['barbell', 'row', 'back']
+      },
+      {
+        'id': 'lat-pulldown',
+        'name': 'Lat Pulldown',
+        'type': 'weight',
+        'muscleGroups': ['back'],
+        'equipment': ['cable'],
+        'searchKeywords': ['lat', 'pulldown', 'back', 'cable']
+      },
+      {
+        'id': 'barbell-curl',
+        'name': 'Barbell Curl',
+        'type': 'weight',
+        'muscleGroups': ['biceps'],
+        'equipment': ['barbell'],
+        'searchKeywords': ['barbell', 'curl', 'bicep']
+      },
+      {
+        'id': 'hammer-curl',
+        'name': 'Hammer Curl',
+        'type': 'weight',
+        'muscleGroups': ['biceps', 'forearms'],
+        'equipment': ['dumbbells'],
+        'searchKeywords': ['hammer', 'curl', 'bicep', 'dumbbell']
+      },
 
       // Day 3: Shoulders & Traps
-      {'id': 'overhead-press', 'name': 'Overhead Press', 'type': 'weight'},
-      {'id': 'dumbbell-lateral-raise', 'name': 'Dumbbell Lateral Raise', 'type': 'weight'},
-      {'id': 'face-pulls', 'name': 'Face Pulls', 'type': 'weight'},
-      {'id': 'dumbbell-front-raise', 'name': 'Dumbbell Front Raise', 'type': 'weight'},
-      {'id': 'barbell-shrugs', 'name': 'Barbell Shrugs', 'type': 'weight'},
+      {
+        'id': 'overhead-press',
+        'name': 'Overhead Press',
+        'type': 'weight',
+        'muscleGroups': ['shoulders', 'triceps'],
+        'equipment': ['barbell'],
+        'searchKeywords': ['overhead', 'press', 'shoulder', 'military']
+      },
+      {
+        'id': 'dumbbell-lateral-raise',
+        'name': 'Dumbbell Lateral Raise',
+        'type': 'weight',
+        'muscleGroups': ['shoulders'],
+        'equipment': ['dumbbells'],
+        'searchKeywords': ['lateral', 'raise', 'shoulder', 'dumbbell']
+      },
+      {
+        'id': 'face-pulls',
+        'name': 'Face Pulls',
+        'type': 'weight',
+        'muscleGroups': ['shoulders', 'traps'],
+        'equipment': ['cable'],
+        'searchKeywords': ['face', 'pull', 'cable', 'shoulder']
+      },
+      {
+        'id': 'dumbbell-front-raise',
+        'name': 'Dumbbell Front Raise',
+        'type': 'weight',
+        'muscleGroups': ['shoulders'],
+        'equipment': ['dumbbells'],
+        'searchKeywords': ['front', 'raise', 'shoulder', 'dumbbell']
+      },
+      {
+        'id': 'barbell-shrugs',
+        'name': 'Barbell Shrugs',
+        'type': 'weight',
+        'muscleGroups': ['traps'],
+        'equipment': ['barbell'],
+        'searchKeywords': ['shrug', 'shrugs', 'trap', 'barbell']
+      },
 
       // Day 4: Legs
-      {'id': 'squat', 'name': 'Squat', 'type': 'weight'},
-      {'id': 'romanian-deadlift', 'name': 'Romanian Deadlift', 'type': 'weight'},
-      {'id': 'leg-press', 'name': 'Leg Press', 'type': 'weight'},
-      {'id': 'leg-curl', 'name': 'Leg Curl', 'type': 'weight'},
-      {'id': 'calf-raise', 'name': 'Calf Raise', 'type': 'weight'},
+      {
+        'id': 'squat',
+        'name': 'Squat',
+        'type': 'weight',
+        'muscleGroups': ['quads', 'glutes', 'hamstrings'],
+        'equipment': ['barbell', 'rack'],
+        'searchKeywords': ['squat', 'leg', 'barbell']
+      },
+      {
+        'id': 'romanian-deadlift',
+        'name': 'Romanian Deadlift',
+        'type': 'weight',
+        'muscleGroups': ['hamstrings', 'glutes', 'back'],
+        'equipment': ['barbell'],
+        'searchKeywords': ['romanian', 'deadlift', 'rdl', 'hamstring']
+      },
+      {
+        'id': 'leg-press',
+        'name': 'Leg Press',
+        'type': 'weight',
+        'muscleGroups': ['quads', 'glutes'],
+        'equipment': ['leg-press-machine'],
+        'searchKeywords': ['leg', 'press', 'quad']
+      },
+      {
+        'id': 'leg-curl',
+        'name': 'Leg Curl',
+        'type': 'weight',
+        'muscleGroups': ['hamstrings'],
+        'equipment': ['leg-curl-machine'],
+        'searchKeywords': ['leg', 'curl', 'hamstring']
+      },
+      {
+        'id': 'calf-raise',
+        'name': 'Calf Raise',
+        'type': 'weight',
+        'muscleGroups': ['calves'],
+        'equipment': ['calf-machine'],
+        'searchKeywords': ['calf', 'raise', 'calves']
+      },
 
       // Timer-based workouts (example)
-      {'id': 'plank', 'name': 'Plank', 'type': 'timer'},
+      {
+        'id': 'plank',
+        'name': 'Plank',
+        'type': 'timer',
+        'muscleGroups': ['core', 'abs'],
+        'equipment': ['bodyweight'],
+        'searchKeywords': ['plank', 'core', 'abs']
+      },
     ];
 
     for (final workout in globalWorkouts) {
+      final muscleGroupsJson = (workout['muscleGroups'] as List).join(',');
+      final equipmentJson = (workout['equipment'] as List).join(',');
+      final searchKeywordsJson = (workout['searchKeywords'] as List).join(',');
+
       await _database.into(_database.globalWorkouts).insert(
         GlobalWorkoutsCompanion.insert(
           id: workout['id'] as String,
           name: workout['name'] as String,
           type: workout['type'] as String,
-          createdAt: DateTime.now(),
+          muscleGroups: muscleGroupsJson,
+          equipment: equipmentJson,
+          searchKeywords: searchKeywordsJson,
+          isActive: const Value(true),
+          createdAt: now,
+          updatedAt: now,
         ),
         mode: InsertMode.insertOrReplace,
       );

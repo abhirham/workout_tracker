@@ -12,7 +12,12 @@ class GlobalWorkouts extends Table {
   TextColumn get id => text()();
   TextColumn get name => text()();
   TextColumn get type => text()();  // 'weight' or 'timer'
+  TextColumn get muscleGroups => text()();  // JSON array of muscle groups
+  TextColumn get equipment => text()();  // JSON array of equipment
+  TextColumn get searchKeywords => text()();  // JSON array of lowercase keywords for autocomplete
+  BoolColumn get isActive => boolean().withDefault(const Constant(true))();  // Soft delete flag
   DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -57,7 +62,13 @@ class Workouts extends Table {
   TextColumn get name => text()();  // Display name (e.g., "Bench Press")
   IntColumn get order => integer()();
   TextColumn get notes => text().nullable()();
-  IntColumn get defaultSets => integer()();
+  TextColumn get baseWeights => text().nullable()();  // JSON array for progressive overload base (null for timer workouts)
+  IntColumn get targetReps => integer().nullable()();  // Target reps set by admin per workout (null for timer workouts)
+  IntColumn get restTimerSeconds => integer().nullable()();  // Rest between sets for weight workouts (null for timer)
+  IntColumn get workoutDurationSeconds => integer().nullable()();  // Duration for timer workouts (null for weight)
+  TextColumn get alternativeWorkouts => text().nullable()();  // JSON array of alternative globalWorkoutIds
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
 
   @override
   Set<Column> get primaryKey => {id};  // Single primary key for foreign key references
@@ -89,7 +100,14 @@ class TimerConfigs extends Table {
 class UserProfiles extends Table {
   TextColumn get userId => text()();
   TextColumn get displayName => text()();
+  TextColumn get email => text().nullable()();
   TextColumn get currentPlanId => text().nullable()();
+  IntColumn get currentWeekNumber => integer().nullable()();
+  IntColumn get currentDayNumber => integer().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get syncLastTemplateSync => dateTime().nullable()();  // Timestamp of last template sync from Firestore
+  DateTimeColumn get syncLastProgressSync => dateTime().nullable()();  // Timestamp of last progress sync with Firestore
 
   @override
   Set<Column> get primaryKey => {userId};
@@ -102,11 +120,13 @@ class CompletedSets extends Table {
   TextColumn get weekId => text()();  // Part of composite key
   TextColumn get dayId => text()();  // Part of composite key
   TextColumn get workoutId => text()();  // References Workouts.id - Part of composite key
+  TextColumn get workoutName => text()();  // Actual exercise name performed (for Firestore sync compatibility)
   IntColumn get setNumber => integer()();
   RealColumn get weight => real().nullable()();  // Nullable for timer-based workouts
   IntColumn get reps => integer().nullable()();  // Nullable for timer-based workouts
   IntColumn get duration => integer().nullable()();  // Duration in seconds for timer-based workouts
   DateTimeColumn get completedAt => dateTime()();
+  DateTimeColumn get syncedAt => dateTime().nullable()();  // Timestamp when synced to Firestore
   TextColumn get workoutAlternativeId => text().nullable()();
 
   @override
@@ -168,7 +188,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration {
@@ -285,6 +305,36 @@ class AppDatabase extends _$AppDatabase {
           await m.createTable(workouts);
           await m.createTable(setTemplates);
           await m.createTable(timerConfigs);
+          await m.createTable(completedSets);
+          await m.createTable(workoutProgressTable);
+          await m.createTable(workoutAlternatives);
+        }
+        if (from < 8) {
+          // Major schema change: expand global workouts with metadata, move workout config from templates to workouts
+          // Add Firestore sync fields to completed sets and user profiles
+
+          // Drop and recreate all tables with new schema (safer than complex column additions)
+          await customStatement('DROP TABLE IF EXISTS set_templates');
+          await customStatement('DROP TABLE IF EXISTS timer_configs');
+          await customStatement('DROP TABLE IF EXISTS completed_sets');
+          await customStatement('DROP TABLE IF EXISTS workout_progress');
+          await customStatement('DROP TABLE IF EXISTS workout_alternatives');
+          await customStatement('DROP TABLE IF EXISTS workouts');
+          await customStatement('DROP TABLE IF EXISTS days');
+          await customStatement('DROP TABLE IF EXISTS weeks');
+          await customStatement('DROP TABLE IF EXISTS workout_plans');
+          await customStatement('DROP TABLE IF EXISTS global_workouts');
+          await customStatement('DROP TABLE IF EXISTS user_profiles');
+
+          // Recreate all tables with schema v8
+          await m.createTable(globalWorkouts);
+          await m.createTable(workoutPlans);
+          await m.createTable(weeks);
+          await m.createTable(days);
+          await m.createTable(workouts);
+          await m.createTable(setTemplates);
+          await m.createTable(timerConfigs);
+          await m.createTable(userProfiles);
           await m.createTable(completedSets);
           await m.createTable(workoutProgressTable);
           await m.createTable(workoutAlternatives);

@@ -12,11 +12,13 @@ class CompletedSet with _$CompletedSet {
     required String weekId,  // Part of composite key for tracking progress
     required String dayId,  // Part of composite key for tracking progress
     required String workoutId,  // References Workouts.id - Part of composite key
+    required String workoutName,  // Actual exercise name performed (for Firestore sync compatibility)
     required int setNumber,
     double? weight,  // Nullable for timer-based workouts
     int? reps,  // Nullable for timer-based workouts
     int? duration,  // Duration in seconds for timer-based workouts
     required DateTime completedAt,
+    DateTime? syncedAt,  // Timestamp when synced to Firestore
     String? workoutAlternativeId,
   }) = _CompletedSet;
 

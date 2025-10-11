@@ -49,7 +49,12 @@ class GlobalWorkoutRepository {
             id: workout.id,
             name: workout.name,
             type: workout.type == WorkoutType.weight ? 'weight' : 'timer',
+            muscleGroups: workout.muscleGroups.join(','),
+            equipment: workout.equipment.join(','),
+            searchKeywords: workout.searchKeywords.join(','),
+            isActive: Value(workout.isActive),
             createdAt: workout.createdAt,
+            updatedAt: workout.updatedAt,
           ),
           mode: InsertMode.insertOrReplace,
         );
@@ -63,6 +68,11 @@ class GlobalWorkoutRepository {
       db.GlobalWorkoutsCompanion(
         name: Value(workout.name),
         type: Value(workout.type == WorkoutType.weight ? 'weight' : 'timer'),
+        muscleGroups: Value(workout.muscleGroups.join(',')),
+        equipment: Value(workout.equipment.join(',')),
+        searchKeywords: Value(workout.searchKeywords.join(',')),
+        isActive: Value(workout.isActive),
+        updatedAt: Value(DateTime.now()),
       ),
     );
   }
@@ -76,11 +86,21 @@ class GlobalWorkoutRepository {
 
   /// Convert database row to GlobalWorkout model
   GlobalWorkout _globalWorkoutFromRow(db.GlobalWorkout row) {
+    // Parse comma-separated strings back to lists
+    final muscleGroups = row.muscleGroups.split(',').where((s) => s.isNotEmpty).toList();
+    final equipment = row.equipment.split(',').where((s) => s.isNotEmpty).toList();
+    final searchKeywords = row.searchKeywords.split(',').where((s) => s.isNotEmpty).toList();
+
     return GlobalWorkout(
       id: row.id,
       name: row.name,
       type: row.type == 'weight' ? WorkoutType.weight : WorkoutType.timer,
+      muscleGroups: muscleGroups,
+      equipment: equipment,
+      searchKeywords: searchKeywords,
+      isActive: row.isActive,
       createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
     );
   }
 }

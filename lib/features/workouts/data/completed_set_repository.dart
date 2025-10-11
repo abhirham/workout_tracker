@@ -17,11 +17,13 @@ class CompletedSetRepository {
             weekId: completedSet.weekId,
             dayId: completedSet.dayId,
             workoutId: completedSet.workoutId,
+            workoutName: completedSet.workoutName,
             setNumber: completedSet.setNumber,
             weight: Value(completedSet.weight),
             reps: Value(completedSet.reps),
             duration: Value(completedSet.duration),
             completedAt: completedSet.completedAt,
+            syncedAt: Value(completedSet.syncedAt),
             workoutAlternativeId: Value(completedSet.workoutAlternativeId),
           ),
         );
@@ -54,11 +56,13 @@ class CompletedSetRepository {
               weekId: row.weekId,
               dayId: row.dayId,
               workoutId: row.workoutId,
+              workoutName: row.workoutName,
               setNumber: row.setNumber,
               weight: row.weight,
               reps: row.reps,
               duration: row.duration,
               completedAt: row.completedAt,
+              syncedAt: row.syncedAt,
               workoutAlternativeId: row.workoutAlternativeId,
             ))
         .toList();
@@ -95,11 +99,13 @@ class CompletedSetRepository {
       weekId: result.weekId,
       dayId: result.dayId,
       workoutId: result.workoutId,
+      workoutName: result.workoutName,
       setNumber: result.setNumber,
       weight: result.weight,
       reps: result.reps,
       duration: result.duration,
       completedAt: result.completedAt,
+      syncedAt: result.syncedAt,
       workoutAlternativeId: result.workoutAlternativeId,
     );
   }
@@ -158,11 +164,13 @@ class CompletedSetRepository {
       weekId: row.weekId,
       dayId: row.dayId,
       workoutId: row.workoutId,
+      workoutName: row.workoutName,
       setNumber: row.setNumber,
       weight: row.weight,
       reps: row.reps,
       duration: row.duration,
       completedAt: row.completedAt,
+      syncedAt: row.syncedAt,
       workoutAlternativeId: row.workoutAlternativeId,
     );
   }
@@ -205,11 +213,13 @@ class CompletedSetRepository {
       weekId: row.weekId,
       dayId: row.dayId,
       workoutId: row.workoutId,
+      workoutName: row.workoutName,
       setNumber: row.setNumber,
       weight: row.weight,
       reps: row.reps,
       duration: row.duration,
       completedAt: row.completedAt,
+      syncedAt: row.syncedAt,
       workoutAlternativeId: row.workoutAlternativeId,
     );
   }
