@@ -15,7 +15,7 @@ This document defines the Firestore data structure for the workout tracking app,
 4. **Offline-First Mobile**: Flutter app uses local Drift database, syncs incrementally with Firestore
 5. **Single Device, Single Admin**: Simplified conflict resolution (no multi-device sync conflicts, no multi-admin race conditions)
 6. **Data Retention**: Client-side cleanup keeps only last 2 cycles (16 weeks) of progress data
-7. **Batch Writes**: Progress syncs in batches of 5 sets to reduce costs by 80%
+7. **Batch Writes**: Progress syncs in batches of 20 sets to reduce costs by ~95%
 8. **Custom Claims**: Admin role stored in Firebase Auth JWT (not Firestore) to avoid extra reads
 
 ---
@@ -507,7 +507,7 @@ const benchPressSets = await getDocs(
 - `workoutName` stores the actual exercise performed, regardless of what was prescribed in the plan template
 - Subcollection path ensures user data isolation
 - **Data Retention**: Client-side cleanup deletes sets older than 2 cycles (plan-dependent duration)
-- **Batch Writes**: Mobile app batches 5 sets per Firestore write to reduce costs by 80%
+- **Batch Writes**: Mobile app batches 20 sets per Firestore write to reduce costs by ~95%
 
 ---
 
@@ -705,8 +705,8 @@ await auth.currentUser?.getIdToken(true);
 
 **Upload (Mobile → Firestore) - BATCHED**:
 
-1. Mobile app buffers completed sets in memory (max 5 sets)
-2. When buffer reaches 5 sets OR 60 seconds elapsed OR app pauses:
+1. Mobile app buffers completed sets in memory (max 20 sets)
+2. When buffer reaches 20 sets OR 60 seconds elapsed OR app pauses:
    - Batch write all pending sets to Firestore in single transaction
    - Set `syncedAt` to server timestamp
    - Clear buffer on success
@@ -868,7 +868,7 @@ export interface CompletedSet {
    - Keep `workoutName` (stores actual exercise performed)
 
 6. **Sync Service**: Implement batching and cleanup
-   - Buffer up to 5 sets before batch write
+   - Buffer up to 20 sets before batch write
    - Auto-flush every 60 seconds or on app pause
    - Client-side cleanup of sets older than 2 cycles (plan-dependent: 2 × totalWeeks)
 
@@ -924,8 +924,8 @@ export interface CompletedSet {
 
 **Writes** (with batch optimization):
 
-- Progress upload: 90,000 sets ÷ 5 (batching) = 18,000 writes/month
-- **Total writes**: ~18,000/month
+- Progress upload: 90,000 sets ÷ 20 (batching) = 4,500 writes/month
+- **Total writes**: ~4,500/month
 
 **Storage** (with retention policy):
 
@@ -937,13 +937,13 @@ export interface CompletedSet {
 **Cost** (as of 2025):
 
 - Reads: 5,000 × $0.06/100k = $0.003
-- Writes: 18,000 × $0.18/100k = $0.03
+- Writes: 4,500 × $0.18/100k = $0.008
 - Storage: 41MB × $0.18/GB = $0.007
-- **Total**: ~$0.04/month
+- **Total**: ~$0.018/month
 
 **Savings from optimizations**:
 
-- Batch writes: 80% reduction (was $0.16, now $0.03)
+- Batch writes: ~95% reduction (was $0.162 without batching, now $0.008)
 - Data retention: 50% reduction in storage growth
 - Lazy-loading weeks: 50% reduction in template sync reads
 
