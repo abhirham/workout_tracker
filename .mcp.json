@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "flutter-docs": {
+      "command": "flutter-mcp"
+    },
+    "design-reviewer": {
+      "agent": "claude",
+      "role": "design-reviewer",
+      "description": "Audits the website against style-guide.md and design PNGs, then generates redesign.md.",
+      "context": [
+        "@admin-dashboard/context/style-guide.md",
+        "@admin-dashboard/context/redesign-template.md"
+      ]
+    }
+  }
+}
