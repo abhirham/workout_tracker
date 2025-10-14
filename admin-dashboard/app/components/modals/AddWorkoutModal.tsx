@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
 import WorkoutAutocomplete from '../search/WorkoutAutocomplete';
 import WorkoutConfigForm from '../forms/WorkoutConfigForm';
 
@@ -46,6 +46,35 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd }: AddWorkoutMo
   const [newWorkoutType, setNewWorkoutType] = useState<'Weight' | 'Timer'>('Weight');
   const [selectedMuscleGroups, setSelectedMuscleGroups] = useState<string[]>([]);
   const [selectedEquipment, setSelectedEquipment] = useState<string[]>([]);
+
+  // Fetch all global workouts
+  const [workouts, setWorkouts] = useState<GlobalWorkout[]>([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchWorkouts();
+    }
+  }, [isOpen]);
+
+  const fetchWorkouts = async () => {
+    try {
+      const q = query(collection(db, 'global_workouts'), orderBy('name'));
+      const snapshot = await getDocs(q);
+      const workoutsData = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name || '',
+          type: (data.type || 'Weight') as 'Weight' | 'Timer',
+          muscleGroups: data.muscleGroups || [],
+          equipment: data.equipment || [],
+        };
+      });
+      setWorkouts(workoutsData);
+    } catch (error) {
+      console.error('Error fetching workouts:', error);
+    }
+  };
 
   const handleClose = () => {
     // Reset state
@@ -121,14 +150,25 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd }: AddWorkoutMo
       });
       handleClose();
     } else if (activeTab === 'new' && newWorkoutName) {
+      // Check for duplicate workout name
+      const trimmedName = newWorkoutName.trim();
+      const duplicate = workouts.find(
+        w => w.name.toLowerCase() === trimmedName.toLowerCase()
+      );
+
+      if (duplicate) {
+        alert(`A workout named "${duplicate.name}" already exists. Please use a different name or select it from the "Select Existing" tab.`);
+        return;
+      }
+
       try {
         // Add new workout to global library
         const docRef = await addDoc(collection(db, 'global_workouts'), {
-          name: newWorkoutName,
+          name: trimmedName,
           type: newWorkoutType,
           muscleGroups: selectedMuscleGroups,
           equipment: selectedEquipment,
-          searchKeywords: newWorkoutName.toLowerCase().split(' '),
+          searchKeywords: trimmedName.toLowerCase().split(' '),
           isActive: true,
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
@@ -137,7 +177,7 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd }: AddWorkoutMo
         // Add to day with config
         const newWorkout = {
           id: `workout-${Date.now()}`,
-          name: newWorkoutName,
+          name: trimmedName,
           type: newWorkoutType,
           muscleGroups: selectedMuscleGroups,
           equipment: selectedEquipment,
@@ -154,14 +194,25 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd }: AddWorkoutMo
 
   const handleCreateAndContinue = async () => {
     if (newWorkoutName) {
+      // Check for duplicate workout name
+      const trimmedName = newWorkoutName.trim();
+      const duplicate = workouts.find(
+        w => w.name.toLowerCase() === trimmedName.toLowerCase()
+      );
+
+      if (duplicate) {
+        alert(`A workout named "${duplicate.name}" already exists. Please use a different name or select it from the "Select Existing" tab.`);
+        return;
+      }
+
       try {
         // Create in global library
         const docRef = await addDoc(collection(db, 'global_workouts'), {
-          name: newWorkoutName,
+          name: trimmedName,
           type: newWorkoutType,
           muscleGroups: selectedMuscleGroups,
           equipment: selectedEquipment,
-          searchKeywords: newWorkoutName.toLowerCase().split(' '),
+          searchKeywords: trimmedName.toLowerCase().split(' '),
           isActive: true,
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
@@ -170,13 +221,22 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd }: AddWorkoutMo
         // Add to day with config
         const newWorkout = {
           id: docRef.id,
-          name: newWorkoutName,
+          name: trimmedName,
           type: newWorkoutType,
           muscleGroups: selectedMuscleGroups,
           equipment: selectedEquipment,
           config: workoutConfig,
         };
         onAdd(newWorkout);
+
+        // Update local workouts list to include the newly created workout
+        setWorkouts([...workouts, {
+          id: docRef.id,
+          name: trimmedName,
+          type: newWorkoutType,
+          muscleGroups: selectedMuscleGroups,
+          equipment: selectedEquipment,
+        }]);
 
         // Reset form but keep modal open
         setNewWorkoutName('');
@@ -248,7 +308,7 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd }: AddWorkoutMo
                   <label className="block text-[13px] font-semibold text-[#000000] mb-2">
                     Select Workout
                   </label>
-                  <WorkoutAutocomplete onSelect={handleWorkoutSelect} />
+                  <WorkoutAutocomplete workouts={workouts} onSelect={handleWorkoutSelect} />
                 </div>
 
                 {/* Configuration Form */}

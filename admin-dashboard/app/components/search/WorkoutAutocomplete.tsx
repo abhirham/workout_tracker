@@ -1,8 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 
 interface GlobalWorkout {
   id: string;
@@ -13,40 +11,16 @@ interface GlobalWorkout {
 }
 
 interface WorkoutAutocompleteProps {
+  workouts: GlobalWorkout[];
   onSelect: (workout: GlobalWorkout) => void;
   placeholder?: string;
 }
 
-export default function WorkoutAutocomplete({ onSelect, placeholder = 'Search workouts...' }: WorkoutAutocompleteProps) {
+export default function WorkoutAutocomplete({ workouts, onSelect, placeholder = 'Search workouts...' }: WorkoutAutocompleteProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [workouts, setWorkouts] = useState<GlobalWorkout[]>([]);
   const [filteredWorkouts, setFilteredWorkouts] = useState<GlobalWorkout[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    fetchWorkouts();
-  }, []);
-
-  const fetchWorkouts = async () => {
-    try {
-      const q = query(collection(db, 'global_workouts'), orderBy('name'));
-      const snapshot = await getDocs(q);
-      const workoutsData = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          name: data.name || '',
-          type: (data.type || 'Weight') as 'Weight' | 'Timer',
-          muscleGroups: data.muscleGroups || [],
-          equipment: data.equipment || [],
-        };
-      });
-      setWorkouts(workoutsData);
-    } catch (error) {
-      console.error('Error fetching workouts:', error);
-    }
-  };
 
   useEffect(() => {
     if (searchTerm.trim()) {
