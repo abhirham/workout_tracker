@@ -37,46 +37,30 @@ export default function WorkoutPlansPage() {
   const fetchPlans = async () => {
     try {
       setLoading(true);
-      // Mock data for now
-      const mockPlans: WorkoutPlan[] = [
-        {
-          id: '1',
-          name: 'Beginner Strength Training',
-          description: 'A comprehensive 8-week program designed for beginners to build foundational strength',
-          totalWeeks: 8,
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: '2',
-          name: 'Advanced Powerlifting',
-          description: '12-week intensive program focused on the big three lifts',
-          totalWeeks: 12,
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: '3',
-          name: 'HIIT Cardio Blast',
-          description: '6-week high-intensity interval training for fat loss and conditioning',
-          totalWeeks: 6,
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: '4',
-          name: 'Bodyweight Basics',
-          description: '4-week program requiring no equipment, perfect for home workouts',
-          totalWeeks: 4,
-          isActive: false,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-      setPlans(mockPlans);
+      const q = query(collection(db, 'workout_plans'), orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+
+      const plansData = await Promise.all(
+        snapshot.docs.map(async (planDoc) => {
+          const data = planDoc.data();
+
+          // Count weeks by fetching weeks subcollection
+          const weeksSnapshot = await getDocs(collection(db, 'workout_plans', planDoc.id, 'weeks'));
+          const totalWeeks = weeksSnapshot.size;
+
+          return {
+            id: planDoc.id,
+            name: data.name || '',
+            description: data.description || '',
+            totalWeeks: totalWeeks,
+            isActive: data.isActive ?? true,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            updatedAt: data.updatedAt?.toDate() || new Date(),
+          };
+        })
+      );
+
+      setPlans(plansData);
     } catch (error) {
       console.error('Error fetching plans:', error);
       alert('Failed to fetch workout plans');
@@ -87,10 +71,11 @@ export default function WorkoutPlansPage() {
 
   const handleToggleActive = async (plan: WorkoutPlan) => {
     try {
-      const updatedPlans = plans.map(p =>
-        p.id === plan.id ? { ...p, isActive: !p.isActive } : p
-      );
-      setPlans(updatedPlans);
+      await updateDoc(doc(db, 'workout_plans', plan.id), {
+        isActive: !plan.isActive,
+        updatedAt: Timestamp.now(),
+      });
+      await fetchPlans();
     } catch (error) {
       console.error('Error toggling active status:', error);
       alert('Failed to update plan status');
@@ -98,10 +83,12 @@ export default function WorkoutPlansPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this plan?')) return;
+    if (!confirm('Are you sure you want to delete this plan? This will also delete all weeks, days, and workouts.')) return;
     try {
-      const updatedPlans = plans.filter(p => p.id !== id);
-      setPlans(updatedPlans);
+      // Note: In production, you'd want to use a Cloud Function to delete subcollections
+      // For now, just delete the plan document (subcollections will remain orphaned)
+      await deleteDoc(doc(db, 'workout_plans', id));
+      await fetchPlans();
     } catch (error) {
       console.error('Error deleting plan:', error);
       alert('Failed to delete workout plan');

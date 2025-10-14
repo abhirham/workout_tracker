@@ -2,6 +2,19 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { db } from '@/lib/firebase';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  addDoc,
+  deleteDoc,
+  Timestamp,
+  writeBatch,
+} from 'firebase/firestore';
 import AddWorkoutModal from '@/app/components/modals/AddWorkoutModal';
 
 interface Workout {
@@ -51,64 +64,93 @@ export default function EditPlanPage() {
   const [activeWeekIndex, setActiveWeekIndex] = useState(0);
   const [isAddWorkoutModalOpen, setIsAddWorkoutModalOpen] = useState(false);
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (planId !== 'new') {
-      // Fetch existing plan - mock data for now
-      setPlan({
-        id: planId,
-        name: 'Beginner Strength Training',
-        description: 'A comprehensive 8-week program designed for beginners to build foundational strength',
-        weeks: [
-          {
-            id: 'week-1',
-            number: 1,
-            days: [],
-          },
-          {
-            id: 'week-2',
-            number: 2,
-            days: [
-              {
-                id: 'day-1',
-                name: 'Day 1',
-                workouts: [
-                  {
-                    id: 'workout-1',
-                    name: 'Overhead Press',
-                    type: 'Weight',
-                    config: {
-                      numSets: 4,
-                      targetReps: 12,
-                      baseWeight: 10,
-                      restTimer: 45,
-                    },
-                  },
-                  {
-                    id: 'workout-2',
-                    name: 'Pull Ups',
-                    type: 'Weight',
-                    config: {
-                      numSets: 4,
-                      targetReps: 12,
-                      baseWeight: 10,
-                      restTimer: 45,
-                    },
-                  },
-                ],
-              },
-              {
-                id: 'day-2',
-                name: 'Day 1 (Copy)',
-                workouts: [],
-              },
-            ],
-          },
-        ],
-      });
-      setActiveWeekIndex(1); // Show Week 2 by default for demo
+      loadPlanFromFirebase();
     }
   }, [planId]);
+
+  const loadPlanFromFirebase = async () => {
+    try {
+      setLoading(true);
+
+      // Fetch plan document
+      const planDoc = await getDoc(doc(db, 'workout_plans', planId));
+      if (!planDoc.exists()) {
+        alert('Plan not found');
+        router.push('/workout-plans');
+        return;
+      }
+
+      const planData = planDoc.data();
+
+      // Fetch weeks subcollection
+      const weeksSnapshot = await getDocs(collection(db, 'workout_plans', planId, 'weeks'));
+      const weeks = await Promise.all(
+        weeksSnapshot.docs.map(async (weekDoc) => {
+          const weekData = weekDoc.data();
+
+          // Fetch days subcollection for this week
+          const daysSnapshot = await getDocs(
+            collection(db, 'workout_plans', planId, 'weeks', weekDoc.id, 'days')
+          );
+
+          const days = await Promise.all(
+            daysSnapshot.docs.map(async (dayDoc) => {
+              const dayData = dayDoc.data();
+
+              // Fetch workouts subcollection for this day
+              const workoutsSnapshot = await getDocs(
+                collection(db, 'workout_plans', planId, 'weeks', weekDoc.id, 'days', dayDoc.id, 'workouts')
+              );
+
+              const workouts = workoutsSnapshot.docs.map((workoutDoc) => {
+                const workoutData = workoutDoc.data();
+                return {
+                  id: workoutDoc.id,
+                  name: workoutData.name || '',
+                  type: workoutData.type || 'Weight',
+                  config: {
+                    baseWeight: workoutData.baseWeight,
+                    targetReps: workoutData.targetReps,
+                    numSets: workoutData.numSets || 0,
+                    restTimer: workoutData.restTimerSeconds,
+                    workoutDuration: workoutData.workoutDurationSeconds,
+                  },
+                };
+              });
+
+              return {
+                id: dayDoc.id,
+                name: dayData.name || '',
+                workouts,
+              };
+            })
+          );
+
+          return {
+            id: weekDoc.id,
+            number: weekData.weekNumber || 0,
+            days,
+          };
+        })
+      );
+
+      setPlan({
+        id: planDoc.id,
+        name: planData.name || '',
+        description: planData.description || '',
+        weeks,
+      });
+    } catch (error) {
+      console.error('Error loading plan:', error);
+      alert('Failed to load plan');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddWeek = () => {
     const newWeek: Week = {
@@ -254,10 +296,99 @@ export default function EditPlanPage() {
     setPlan({ ...plan, weeks: updatedWeeks });
   };
 
-  const handleSave = () => {
-    // Save to Firebase
-    console.log('Saving plan:', plan);
-    alert('Plan saved successfully!');
+  const handleSave = async () => {
+    try {
+      if (!plan.name.trim()) {
+        alert('Please enter a plan name');
+        return;
+      }
+
+      setLoading(true);
+
+      const isNewPlan = plan.id === '' || planId === 'new';
+      let finalPlanId = plan.id;
+
+      // Save or update plan document
+      if (isNewPlan) {
+        const planRef = await addDoc(collection(db, 'workout_plans'), {
+          name: plan.name,
+          description: plan.description,
+          totalWeeks: plan.weeks.length,
+          isActive: true,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+        finalPlanId = planRef.id;
+      } else {
+        await updateDoc(doc(db, 'workout_plans', finalPlanId), {
+          name: plan.name,
+          description: plan.description,
+          totalWeeks: plan.weeks.length,
+          updatedAt: Timestamp.now(),
+        });
+      }
+
+      // Save weeks, days, and workouts (nested subcollections)
+      for (const week of plan.weeks) {
+        const weekRef = doc(db, 'workout_plans', finalPlanId, 'weeks', week.id);
+        await setDoc(weekRef, {
+          weekNumber: week.number,
+          name: `Week ${week.number}`,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+
+        // Save days for this week
+        for (const day of week.days) {
+          const dayRef = doc(db, 'workout_plans', finalPlanId, 'weeks', week.id, 'days', day.id);
+          await setDoc(dayRef, {
+            dayNumber: day.name.match(/\d+/)?.[0] || '1',
+            name: day.name,
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+          });
+
+          // Save workouts for this day
+          for (const workout of day.workouts) {
+            const workoutRef = doc(
+              db,
+              'workout_plans',
+              finalPlanId,
+              'weeks',
+              week.id,
+              'days',
+              day.id,
+              'workouts',
+              workout.id
+            );
+            await setDoc(workoutRef, {
+              name: workout.name,
+              type: workout.type,
+              order: day.workouts.indexOf(workout) + 1,
+              numSets: workout.config.numSets,
+              targetReps: workout.config.targetReps || null,
+              baseWeight: workout.config.baseWeight || null,
+              restTimerSeconds: workout.config.restTimer || null,
+              workoutDurationSeconds: workout.config.workoutDuration || null,
+              createdAt: Timestamp.now(),
+              updatedAt: Timestamp.now(),
+            });
+          }
+        }
+      }
+
+      alert('Plan saved successfully!');
+
+      // Redirect to edit page if it was a new plan
+      if (isNewPlan) {
+        router.push(`/workout-plans/${finalPlanId}`);
+      }
+    } catch (error) {
+      console.error('Error saving plan:', error);
+      alert('Failed to save plan. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleExportJSON = () => {
@@ -271,6 +402,17 @@ export default function EditPlanPage() {
   };
 
   const currentWeek = plan.weeks[activeWeekIndex];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+          <p className="text-gray-500 font-medium">Loading plan...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-16">

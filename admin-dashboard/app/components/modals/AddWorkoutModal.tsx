@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import WorkoutAutocomplete from '../search/WorkoutAutocomplete';
 import WorkoutConfigForm from '../forms/WorkoutConfigForm';
 
@@ -110,44 +112,80 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd }: AddWorkoutMo
     }
   };
 
-  const handleAddToDay = () => {
+  const handleAddToDay = async () => {
     if (activeTab === 'existing' && selectedWorkout) {
       onAdd({
+        id: `workout-${Date.now()}`,
         ...selectedWorkout,
         config: workoutConfig,
       });
       handleClose();
     } else if (activeTab === 'new' && newWorkoutName) {
-      // Add new workout to global library + add to day
-      const newWorkout = {
-        id: Date.now().toString(),
-        name: newWorkoutName,
-        type: newWorkoutType,
-        muscleGroups: selectedMuscleGroups,
-        equipment: selectedEquipment,
-        config: workoutConfig,
-      };
-      onAdd(newWorkout);
-      handleClose();
+      try {
+        // Add new workout to global library
+        const docRef = await addDoc(collection(db, 'global_workouts'), {
+          name: newWorkoutName,
+          type: newWorkoutType,
+          muscleGroups: selectedMuscleGroups,
+          equipment: selectedEquipment,
+          searchKeywords: newWorkoutName.toLowerCase().split(' '),
+          isActive: true,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+
+        // Add to day with config
+        const newWorkout = {
+          id: `workout-${Date.now()}`,
+          name: newWorkoutName,
+          type: newWorkoutType,
+          muscleGroups: selectedMuscleGroups,
+          equipment: selectedEquipment,
+          config: workoutConfig,
+        };
+        onAdd(newWorkout);
+        handleClose();
+      } catch (error) {
+        console.error('Error creating workout:', error);
+        alert('Failed to create workout');
+      }
     }
   };
 
-  const handleCreateAndContinue = () => {
+  const handleCreateAndContinue = async () => {
     if (newWorkoutName) {
-      // Create in global library, add to day, and keep modal open
-      const newWorkout = {
-        id: Date.now().toString(),
-        name: newWorkoutName,
-        type: newWorkoutType,
-        muscleGroups: selectedMuscleGroups,
-        equipment: selectedEquipment,
-        config: workoutConfig,
-      };
-      onAdd(newWorkout);
-      // Reset form but keep modal open
-      setNewWorkoutName('');
-      setSelectedMuscleGroups([]);
-      setSelectedEquipment([]);
+      try {
+        // Create in global library
+        const docRef = await addDoc(collection(db, 'global_workouts'), {
+          name: newWorkoutName,
+          type: newWorkoutType,
+          muscleGroups: selectedMuscleGroups,
+          equipment: selectedEquipment,
+          searchKeywords: newWorkoutName.toLowerCase().split(' '),
+          isActive: true,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+
+        // Add to day with config
+        const newWorkout = {
+          id: docRef.id,
+          name: newWorkoutName,
+          type: newWorkoutType,
+          muscleGroups: selectedMuscleGroups,
+          equipment: selectedEquipment,
+          config: workoutConfig,
+        };
+        onAdd(newWorkout);
+
+        // Reset form but keep modal open
+        setNewWorkoutName('');
+        setSelectedMuscleGroups([]);
+        setSelectedEquipment([]);
+      } catch (error) {
+        console.error('Error creating workout:', error);
+        alert('Failed to create workout');
+      }
     }
   };
 

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 
 interface GlobalWorkout {
   id: string;
@@ -23,53 +25,28 @@ export default function WorkoutAutocomplete({ onSelect, placeholder = 'Search wo
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Mock data - replace with actual Firebase query
-    const mockWorkouts: GlobalWorkout[] = [
-      {
-        id: '1',
-        name: 'Bench Press',
-        type: 'Weight',
-        muscleGroups: ['Chest', 'Triceps'],
-        equipment: ['Barbell', 'Bench'],
-      },
-      {
-        id: '2',
-        name: 'Squat',
-        type: 'Weight',
-        muscleGroups: ['Legs', 'Glutes'],
-        equipment: ['Barbell'],
-      },
-      {
-        id: '3',
-        name: 'Deadlift',
-        type: 'Weight',
-        muscleGroups: ['Back', 'Legs'],
-        equipment: ['Barbell'],
-      },
-      {
-        id: '4',
-        name: 'Overhead Press',
-        type: 'Weight',
-        muscleGroups: ['Shoulders', 'Triceps'],
-        equipment: ['Barbell'],
-      },
-      {
-        id: '5',
-        name: 'Pull Ups',
-        type: 'Weight',
-        muscleGroups: ['Back', 'Biceps'],
-        equipment: ['Pull-up Bar'],
-      },
-      {
-        id: '6',
-        name: 'Plank',
-        type: 'Timer',
-        muscleGroups: ['Core'],
-        equipment: ['Bodyweight'],
-      },
-    ];
-    setWorkouts(mockWorkouts);
+    fetchWorkouts();
   }, []);
+
+  const fetchWorkouts = async () => {
+    try {
+      const q = query(collection(db, 'global_workouts'), orderBy('name'));
+      const snapshot = await getDocs(q);
+      const workoutsData = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name || '',
+          type: (data.type || 'Weight') as 'Weight' | 'Timer',
+          muscleGroups: data.muscleGroups || [],
+          equipment: data.equipment || [],
+        };
+      });
+      setWorkouts(workoutsData);
+    } catch (error) {
+      console.error('Error fetching workouts:', error);
+    }
+  };
 
   useEffect(() => {
     if (searchTerm.trim()) {
