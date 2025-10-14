@@ -326,6 +326,70 @@ export default function EditPlanPage() {
           totalWeeks: plan.weeks.length,
           updatedAt: Timestamp.now(),
         });
+
+        // CLEANUP: Delete orphaned documents that were removed locally
+        // Fetch existing weeks from Firestore
+        const existingWeeksSnapshot = await getDocs(
+          collection(db, 'workout_plans', finalPlanId, 'weeks')
+        );
+
+        const localWeekIds = new Set(plan.weeks.map(w => w.id));
+
+        // Delete orphaned weeks
+        for (const weekDoc of existingWeeksSnapshot.docs) {
+          if (!localWeekIds.has(weekDoc.id)) {
+            // Week was deleted locally, remove from Firestore
+            await deleteDoc(doc(db, 'workout_plans', finalPlanId, 'weeks', weekDoc.id));
+          }
+        }
+
+        // For each week in local state, check for orphaned days and workouts
+        for (const week of plan.weeks) {
+          const existingDaysSnapshot = await getDocs(
+            collection(db, 'workout_plans', finalPlanId, 'weeks', week.id, 'days')
+          );
+
+          const localDayIds = new Set(week.days.map(d => d.id));
+
+          // Delete orphaned days
+          for (const dayDoc of existingDaysSnapshot.docs) {
+            if (!localDayIds.has(dayDoc.id)) {
+              // Day was deleted locally, remove from Firestore
+              await deleteDoc(
+                doc(db, 'workout_plans', finalPlanId, 'weeks', week.id, 'days', dayDoc.id)
+              );
+            }
+          }
+
+          // For each day in local state, check for orphaned workouts
+          for (const day of week.days) {
+            const existingWorkoutsSnapshot = await getDocs(
+              collection(db, 'workout_plans', finalPlanId, 'weeks', week.id, 'days', day.id, 'workouts')
+            );
+
+            const localWorkoutIds = new Set(day.workouts.map(w => w.id));
+
+            // Delete orphaned workouts
+            for (const workoutDoc of existingWorkoutsSnapshot.docs) {
+              if (!localWorkoutIds.has(workoutDoc.id)) {
+                // Workout was deleted locally, remove from Firestore
+                await deleteDoc(
+                  doc(
+                    db,
+                    'workout_plans',
+                    finalPlanId,
+                    'weeks',
+                    week.id,
+                    'days',
+                    day.id,
+                    'workouts',
+                    workoutDoc.id
+                  )
+                );
+              }
+            }
+          }
+        }
       }
 
       // Save weeks, days, and workouts (nested subcollections)
