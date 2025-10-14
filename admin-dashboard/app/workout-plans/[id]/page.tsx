@@ -13,7 +13,6 @@ import {
   addDoc,
   deleteDoc,
   Timestamp,
-  writeBatch,
 } from 'firebase/firestore';
 import AddWorkoutModal from '@/app/components/modals/AddWorkoutModal';
 
@@ -172,7 +171,7 @@ export default function EditPlanPage() {
       days: currentWeek.days.map(day => ({
         ...day,
         id: `day-${Date.now()}-${day.id}`,
-        name: `${day.name} (Copy)`,
+        name: day.name, // Keep original name without "(Copy)"
       })),
     };
     setPlan({ ...plan, weeks: [...plan.weeks, copiedWeek] });
@@ -208,26 +207,6 @@ export default function EditPlanPage() {
     setPlan({ ...plan, weeks: updatedWeeks });
   };
 
-  const handleCopyDay = (dayId: string) => {
-    const currentWeek = plan.weeks[activeWeekIndex];
-    if (!currentWeek) return;
-
-    const dayToCopy = currentWeek.days.find(d => d.id === dayId);
-    if (!dayToCopy) return;
-
-    const copiedDay: Day = {
-      ...dayToCopy,
-      id: `day-${Date.now()}`,
-      name: `${dayToCopy.name} (Copy)`,
-    };
-
-    const updatedWeeks = [...plan.weeks];
-    updatedWeeks[activeWeekIndex] = {
-      ...currentWeek,
-      days: [...currentWeek.days, copiedDay],
-    };
-    setPlan({ ...plan, weeks: updatedWeeks });
-  };
 
   const handleDeleteDay = (dayId: string) => {
     if (!confirm('Are you sure you want to delete this day?')) return;
@@ -635,26 +614,15 @@ export default function EditPlanPage() {
                   {/* Day Header */}
                   <div className="px-4 py-3 bg-[#F8FAFC] border-b border-[#E2E8F0] flex items-center justify-between">
                     <h4 className="text-[14px] font-semibold text-[#000000]">{day.name}</h4>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleCopyDay(day.id)}
-                        className="p-1 text-[#64748B] hover:text-[#000000] transition-colors"
-                        title="Copy Day"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleDeleteDay(day.id)}
-                        className="p-1 text-[#64748B] hover:text-[#DC2626] transition-colors"
-                        title="Delete Day"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => handleDeleteDay(day.id)}
+                      className="p-1 text-[#64748B] hover:text-[#DC2626] transition-colors"
+                      title="Delete Day"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
                   </div>
 
                   {/* Workouts List */}
