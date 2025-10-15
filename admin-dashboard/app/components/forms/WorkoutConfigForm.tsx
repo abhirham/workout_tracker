@@ -32,8 +32,9 @@ export default function WorkoutConfigForm({ workoutType, config, onChange }: Wor
                 type="number"
                 id="baseWeight"
                 min="0"
+                step="0.5"
                 value={config.baseWeight || 0}
-                onChange={(e) => handleChange('baseWeight', parseInt(e.target.value) || 0)}
+                onChange={(e) => handleChange('baseWeight', parseFloat(e.target.value) || 0)}
                 className="w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-[14px] bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent"
                 placeholder="10"
               />
