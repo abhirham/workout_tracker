@@ -13,6 +13,7 @@ import {
   orderBy,
   Timestamp,
 } from 'firebase/firestore';
+import { checkGlobalWorkoutReferences } from '@/lib/firestore-helpers';
 
 type WorkoutType = 'Weight' | 'Timer';
 
@@ -176,15 +177,33 @@ export default function GlobalWorkoutsPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this workout?')) return;
-
+  const handleDelete = async (id: string, workoutName: string) => {
     try {
+      setLoading(true);
+
+      // Check if the workout is referenced in any workout plans
+      const references = await checkGlobalWorkoutReferences(id);
+
+      if (references.isReferenced) {
+        const plansList = references.planNames.join(', ');
+        alert(
+          `Cannot delete "${workoutName}" because it is used in ${references.planCount} workout plan(s):\n\n${plansList}\n\nPlease remove the workout from these plans before deleting it.`
+        );
+        return;
+      }
+
+      // Confirm deletion if no references found
+      if (!confirm(`Are you sure you want to delete "${workoutName}"? This action cannot be undone.`)) {
+        return;
+      }
+
       await deleteDoc(doc(db, 'global_workouts', id));
       await fetchWorkouts();
     } catch (error) {
       console.error('Error deleting workout:', error);
-      alert('Failed to delete workout');
+      alert('Failed to delete workout. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -359,7 +378,7 @@ export default function GlobalWorkoutsPage() {
                         </svg>
                       </button>
                       <button
-                        onClick={() => handleDelete(workout.id)}
+                        onClick={() => handleDelete(workout.id, workout.name)}
                         className="text-[#64748B] hover:text-[#DC2626] transition-colors"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

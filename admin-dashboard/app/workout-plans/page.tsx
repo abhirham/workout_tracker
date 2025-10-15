@@ -8,12 +8,12 @@ import {
   getDocs,
   addDoc,
   updateDoc,
-  deleteDoc,
   doc,
   query,
   orderBy,
   Timestamp,
 } from 'firebase/firestore';
+import { deleteWorkoutPlanWithSubcollections } from '@/lib/firestore-helpers';
 
 interface WorkoutPlan {
   id: string;
@@ -83,15 +83,18 @@ export default function WorkoutPlansPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this plan? This will also delete all weeks, days, and workouts.')) return;
+    if (!confirm('Are you sure you want to delete this plan? This will permanently delete all weeks, days, and workouts.')) return;
+
     try {
-      // Note: In production, you'd want to use a Cloud Function to delete subcollections
-      // For now, just delete the plan document (subcollections will remain orphaned)
-      await deleteDoc(doc(db, 'workout_plans', id));
+      setLoading(true);
+      // Use cascade deletion to remove all subcollections
+      await deleteWorkoutPlanWithSubcollections(id);
       await fetchPlans();
     } catch (error) {
       console.error('Error deleting plan:', error);
-      alert('Failed to delete workout plan');
+      alert('Failed to delete workout plan. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
