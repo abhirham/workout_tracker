@@ -39,6 +39,7 @@ interface Workout {
   type: 'Weight' | 'Timer';
   muscleGroups: string[];
   equipment: string[];
+  order?: number;
   config: {
     baseWeight?: number;
     targetReps?: number;
@@ -216,23 +217,26 @@ export default function EditPlanPage() {
                 collection(db, 'workout_plans', planId, 'weeks', weekDoc.id, 'days', dayDoc.id, 'workouts')
               );
 
-              const workouts = workoutsSnapshot.docs.map((workoutDoc) => {
-                const workoutData = workoutDoc.data();
-                return {
-                  id: workoutDoc.id,
-                  name: workoutData.name || '',
-                  type: workoutData.type || 'Weight',
-                  muscleGroups: workoutData.muscleGroups || [],
-                  equipment: workoutData.equipment || [],
-                  config: {
-                    baseWeight: workoutData.baseWeight,
-                    targetReps: workoutData.targetReps,
-                    numSets: workoutData.numSets || 0,
-                    restTimer: workoutData.restTimerSeconds,
-                    workoutDuration: workoutData.workoutDurationSeconds,
-                  },
-                };
-              });
+              const workouts = workoutsSnapshot.docs
+                .map((workoutDoc) => {
+                  const workoutData = workoutDoc.data();
+                  return {
+                    id: workoutDoc.id,
+                    name: workoutData.name || '',
+                    type: workoutData.type || 'Weight',
+                    muscleGroups: workoutData.muscleGroups || [],
+                    equipment: workoutData.equipment || [],
+                    order: workoutData.order || 0,
+                    config: {
+                      baseWeight: workoutData.baseWeight,
+                      targetReps: workoutData.targetReps,
+                      numSets: workoutData.numSets || 0,
+                      restTimer: workoutData.restTimerSeconds,
+                      workoutDuration: workoutData.workoutDurationSeconds,
+                    },
+                  };
+                })
+                .sort((a, b) => a.order - b.order);
 
               return {
                 id: dayDoc.id,
@@ -576,6 +580,8 @@ export default function EditPlanPage() {
             await setDoc(workoutRef, {
               name: workout.name,
               type: workout.type,
+              muscleGroups: workout.muscleGroups || [],
+              equipment: workout.equipment || [],
               order: day.workouts.indexOf(workout) + 1,
               numSets: workout.config.numSets,
               targetReps: workout.config.targetReps || null,
