@@ -22,16 +22,27 @@ interface WorkoutConfig {
   workoutDuration?: number;
 }
 
+interface Workout {
+  id: string;
+  name: string;
+  type: 'Weight' | 'Timer';
+  muscleGroups: string[];
+  equipment: string[];
+  config: WorkoutConfig;
+}
+
 interface AddWorkoutModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (workout: any) => void;
+  editingWorkout?: Workout | null;
+  mode?: 'add' | 'edit';
 }
 
 const MUSCLE_GROUPS = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Biceps', 'Triceps', 'Core', 'Glutes', 'Cardio'];
 const EQUIPMENT = ['Barbell', 'Dumbbell', 'Bench', 'Bodyweight', 'Machine', 'Pull-up Bar', 'Dip Bar', 'None'];
 
-export default function AddWorkoutModal({ isOpen, onClose, onAdd }: AddWorkoutModalProps) {
+export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout = null, mode = 'add' }: AddWorkoutModalProps) {
   const [activeTab, setActiveTab] = useState<'existing' | 'new'>('existing');
   const [selectedWorkout, setSelectedWorkout] = useState<GlobalWorkout | null>(null);
   const [workoutConfig, setWorkoutConfig] = useState<WorkoutConfig>({
@@ -53,8 +64,13 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd }: AddWorkoutMo
   useEffect(() => {
     if (isOpen) {
       fetchWorkouts();
+
+      // If in edit mode, pre-populate the form with existing workout data
+      if (mode === 'edit' && editingWorkout) {
+        setWorkoutConfig(editingWorkout.config);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, mode, editingWorkout]);
 
   const fetchWorkouts = async () => {
     try {
@@ -142,6 +158,17 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd }: AddWorkoutMo
   };
 
   const handleAddToDay = async () => {
+    // Handle edit mode
+    if (mode === 'edit' && editingWorkout) {
+      onAdd({
+        ...editingWorkout,
+        config: workoutConfig,
+      });
+      handleClose();
+      return;
+    }
+
+    // Handle add mode
     if (activeTab === 'existing' && selectedWorkout) {
       onAdd({
         id: `workout-${Date.now()}`,
@@ -262,8 +289,12 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd }: AddWorkoutMo
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-[24px] font-bold text-[#000000]">Add Workout</h3>
-              <p className="text-[14px] text-[#64748B] mt-1">Select an existing workout or create a new one</p>
+              <h3 className="text-[24px] font-bold text-[#000000]">
+                {mode === 'edit' ? 'Edit Workout' : 'Add Workout'}
+              </h3>
+              <p className="text-[14px] text-[#64748B] mt-1">
+                {mode === 'edit' ? 'Update workout configuration' : 'Select an existing workout or create a new one'}
+              </p>
             </div>
             <button
               onClick={handleClose}
@@ -275,33 +306,55 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd }: AddWorkoutMo
             </button>
           </div>
 
-          {/* Tabs */}
-          <div className="flex items-center bg-[#F1F5F9] rounded-lg p-1 mb-6">
-            <button
-              onClick={() => setActiveTab('existing')}
-              className={`flex-1 px-4 py-2.5 text-[14px] font-medium rounded-lg transition-colors ${
-                activeTab === 'existing'
-                  ? 'bg-white text-[#000000] shadow-sm'
-                  : 'text-[#64748B] hover:text-[#000000]'
-              }`}
-            >
-              Select Existing
-            </button>
-            <button
-              onClick={() => setActiveTab('new')}
-              className={`flex-1 px-4 py-2.5 text-[14px] font-medium rounded-lg transition-colors ${
-                activeTab === 'new'
-                  ? 'bg-white text-[#000000] shadow-sm'
-                  : 'text-[#64748B] hover:text-[#000000]'
-              }`}
-            >
-              Create New
-            </button>
-          </div>
+          {/* Tabs (hide in edit mode) */}
+          {mode !== 'edit' && (
+            <div className="flex items-center bg-[#F1F5F9] rounded-lg p-1 mb-6">
+              <button
+                onClick={() => setActiveTab('existing')}
+                className={`flex-1 px-4 py-2.5 text-[14px] font-medium rounded-lg transition-colors ${
+                  activeTab === 'existing'
+                    ? 'bg-white text-[#000000] shadow-sm'
+                    : 'text-[#64748B] hover:text-[#000000]'
+                }`}
+              >
+                Select Existing
+              </button>
+              <button
+                onClick={() => setActiveTab('new')}
+                className={`flex-1 px-4 py-2.5 text-[14px] font-medium rounded-lg transition-colors ${
+                  activeTab === 'new'
+                    ? 'bg-white text-[#000000] shadow-sm'
+                    : 'text-[#64748B] hover:text-[#000000]'
+                }`}
+              >
+                Create New
+              </button>
+            </div>
+          )}
 
           {/* Tab Content */}
           <div className="space-y-6">
-            {activeTab === 'existing' ? (
+            {mode === 'edit' && editingWorkout ? (
+              <>
+                {/* Edit Mode: Show workout name as read-only */}
+                <div>
+                  <label className="block text-[13px] font-semibold text-[#000000] mb-2">
+                    Workout Name
+                  </label>
+                  <div className="px-4 py-2.5 border border-[#E2E8F0] rounded-lg text-[14px] bg-[#F8FAFC] text-[#64748B]">
+                    {editingWorkout.name}
+                  </div>
+                  <p className="text-[12px] text-[#94A3B8] mt-1">Workout name cannot be changed. Delete and re-add to change.</p>
+                </div>
+
+                {/* Configuration Form */}
+                <WorkoutConfigForm
+                  workoutType={editingWorkout.type}
+                  config={workoutConfig}
+                  onChange={setWorkoutConfig}
+                />
+              </>
+            ) : activeTab === 'existing' ? (
               <>
                 {/* Search */}
                 <div>
@@ -437,12 +490,13 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd }: AddWorkoutMo
             <button
               onClick={handleAddToDay}
               disabled={
+                mode === 'edit' ? false :
                 (activeTab === 'existing' && !selectedWorkout) ||
                 (activeTab === 'new' && !newWorkoutName)
               }
               className="px-6 py-2.5 text-[14px] font-medium text-white bg-[#64748B] rounded-lg hover:bg-[#475569] transition-colors disabled:bg-[#E2E8F0] disabled:text-[#94A3B8] disabled:cursor-not-allowed"
             >
-              Add to Day
+              {mode === 'edit' ? 'Update Workout' : 'Add to Day'}
             </button>
           </div>
         </div>

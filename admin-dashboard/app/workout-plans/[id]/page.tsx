@@ -14,12 +14,31 @@ import {
   deleteDoc,
   Timestamp,
 } from 'firebase/firestore';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import AddWorkoutModal from '@/app/components/modals/AddWorkoutModal';
 
 interface Workout {
   id: string;
   name: string;
   type: 'Weight' | 'Timer';
+  muscleGroups: string[];
+  equipment: string[];
   config: {
     baseWeight?: number;
     targetReps?: number;
@@ -48,6 +67,89 @@ interface WorkoutPlan {
   weeks: Week[];
 }
 
+interface SortableWorkoutItemProps {
+  workout: Workout;
+  index: number;
+  onEdit: () => void;
+  onDelete: () => void;
+}
+
+function SortableWorkoutItem({ workout, index, onEdit, onDelete }: SortableWorkoutItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: workout.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-start gap-2"
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="flex-shrink-0 mt-1 cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded transition-colors"
+      >
+        <svg className="w-4 h-4 text-[#94A3B8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <circle cx="9" cy="5" r="1" fill="currentColor" />
+          <circle cx="9" cy="12" r="1" fill="currentColor" />
+          <circle cx="9" cy="19" r="1" fill="currentColor" />
+          <circle cx="15" cy="5" r="1" fill="currentColor" />
+          <circle cx="15" cy="12" r="1" fill="currentColor" />
+          <circle cx="15" cy="19" r="1" fill="currentColor" />
+        </svg>
+      </button>
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] font-medium text-[#000000]">
+          {index + 1}. {workout.name}
+        </div>
+        <div className="text-[12px] text-[#64748B] mt-0.5">
+          {workout.type === 'Weight' ? (
+            <>
+              {workout.config.numSets} x {workout.config.targetReps} @ {workout.config.baseWeight}lbs
+            </>
+          ) : (
+            <>
+              {workout.config.numSets} x {workout.config.workoutDuration}s
+            </>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={onEdit}
+          className="flex-shrink-0 p-1 text-[#64748B] hover:text-[#2563EB] transition-colors"
+          title="Edit Workout"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+        </button>
+        <button
+          onClick={onDelete}
+          className="flex-shrink-0 p-1 text-[#64748B] hover:text-[#DC2626] transition-colors"
+          title="Delete Workout"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function EditPlanPage() {
   const router = useRouter();
   const params = useParams();
@@ -64,6 +166,15 @@ export default function EditPlanPage() {
   const [isAddWorkoutModalOpen, setIsAddWorkoutModalOpen] = useState(false);
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
+  const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     if (planId !== 'new') {
@@ -111,6 +222,8 @@ export default function EditPlanPage() {
                   id: workoutDoc.id,
                   name: workoutData.name || '',
                   type: workoutData.type || 'Weight',
+                  muscleGroups: workoutData.muscleGroups || [],
+                  equipment: workoutData.equipment || [],
                   config: {
                     baseWeight: workoutData.baseWeight,
                     targetReps: workoutData.targetReps,
@@ -224,6 +337,15 @@ export default function EditPlanPage() {
 
   const handleAddWorkout = (dayId: string) => {
     setSelectedDayId(dayId);
+    setModalMode('add');
+    setEditingWorkout(null);
+    setIsAddWorkoutModalOpen(true);
+  };
+
+  const handleEditWorkout = (dayId: string, workout: Workout) => {
+    setSelectedDayId(dayId);
+    setEditingWorkout(workout);
+    setModalMode('edit');
     setIsAddWorkoutModalOpen(true);
   };
 
@@ -238,10 +360,23 @@ export default function EditPlanPage() {
     if (dayIndex === -1) return;
 
     const updatedDays = [...currentWeek.days];
-    updatedDays[dayIndex] = {
-      ...updatedDays[dayIndex],
-      workouts: [...updatedDays[dayIndex].workouts, workout],
-    };
+
+    // Check if we're editing or adding
+    if (modalMode === 'edit' && editingWorkout) {
+      // Replace the existing workout
+      updatedDays[dayIndex] = {
+        ...updatedDays[dayIndex],
+        workouts: updatedDays[dayIndex].workouts.map(w =>
+          w.id === editingWorkout.id ? workout : w
+        ),
+      };
+    } else {
+      // Add new workout
+      updatedDays[dayIndex] = {
+        ...updatedDays[dayIndex],
+        workouts: [...updatedDays[dayIndex].workouts, workout],
+      };
+    }
 
     updatedWeeks[activeWeekIndex] = {
       ...currentWeek,
@@ -273,6 +408,40 @@ export default function EditPlanPage() {
     };
 
     setPlan({ ...plan, weeks: updatedWeeks });
+  };
+
+  const handleDragEnd = (event: DragEndEvent, dayId: string) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    const currentWeek = plan.weeks[activeWeekIndex];
+    if (!currentWeek) return;
+
+    const dayIndex = currentWeek.days.findIndex(d => d.id === dayId);
+    if (dayIndex === -1) return;
+
+    const day = currentWeek.days[dayIndex];
+    const oldIndex = day.workouts.findIndex(w => w.id === active.id);
+    const newIndex = day.workouts.findIndex(w => w.id === over.id);
+
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const reorderedWorkouts = arrayMove(day.workouts, oldIndex, newIndex);
+
+      const updatedWeeks = [...plan.weeks];
+      const updatedDays = [...currentWeek.days];
+      updatedDays[dayIndex] = {
+        ...day,
+        workouts: reorderedWorkouts,
+      };
+
+      updatedWeeks[activeWeekIndex] = {
+        ...currentWeek,
+        days: updatedDays,
+      };
+
+      setPlan({ ...plan, weeks: updatedWeeks });
+    }
   };
 
   const handleSave = async () => {
@@ -628,44 +797,28 @@ export default function EditPlanPage() {
                   {/* Workouts List */}
                   <div className="p-4 space-y-3">
                     {day.workouts.length > 0 ? (
-                      day.workouts.map((workout, idx) => (
-                        <div key={workout.id} className="flex items-start gap-2">
-                          <div className="flex-shrink-0 mt-1">
-                            <svg className="w-4 h-4 text-[#94A3B8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <circle cx="9" cy="5" r="1" fill="currentColor" />
-                              <circle cx="9" cy="12" r="1" fill="currentColor" />
-                              <circle cx="9" cy="19" r="1" fill="currentColor" />
-                              <circle cx="15" cy="5" r="1" fill="currentColor" />
-                              <circle cx="15" cy="12" r="1" fill="currentColor" />
-                              <circle cx="15" cy="19" r="1" fill="currentColor" />
-                            </svg>
+                      <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={(event) => handleDragEnd(event, day.id)}
+                      >
+                        <SortableContext
+                          items={day.workouts.map(w => w.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          <div className="space-y-3">
+                            {day.workouts.map((workout, idx) => (
+                              <SortableWorkoutItem
+                                key={workout.id}
+                                workout={workout}
+                                index={idx}
+                                onEdit={() => handleEditWorkout(day.id, workout)}
+                                onDelete={() => handleDeleteWorkout(day.id, workout.id)}
+                              />
+                            ))}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[13px] font-medium text-[#000000]">
-                              {idx + 1}. {workout.name}
-                            </div>
-                            <div className="text-[12px] text-[#64748B] mt-0.5">
-                              {workout.type === 'Weight' ? (
-                                <>
-                                  {workout.config.numSets} x {workout.config.targetReps} @ {workout.config.baseWeight}lbs
-                                </>
-                              ) : (
-                                <>
-                                  {workout.config.numSets} x {workout.config.workoutDuration}s
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleDeleteWorkout(day.id, workout.id)}
-                            className="flex-shrink-0 p-1 text-[#64748B] hover:text-[#DC2626] transition-colors"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        </div>
-                      ))
+                        </SortableContext>
+                      </DndContext>
                     ) : (
                       <div className="text-center py-6 text-[#94A3B8] text-[13px]">
                         No workouts added
@@ -710,8 +863,12 @@ export default function EditPlanPage() {
         onClose={() => {
           setIsAddWorkoutModalOpen(false);
           setSelectedDayId(null);
+          setEditingWorkout(null);
+          setModalMode('add');
         }}
         onAdd={handleWorkoutAdded}
+        editingWorkout={editingWorkout}
+        mode={modalMode}
       />
     </div>
   );
