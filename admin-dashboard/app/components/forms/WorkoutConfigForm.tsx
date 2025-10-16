@@ -35,6 +35,7 @@ export default function WorkoutConfigForm({ workoutType, config, onChange }: Wor
                 step="0.5"
                 value={config.baseWeight || 0}
                 onChange={(e) => handleChange('baseWeight', parseFloat(e.target.value) || 0)}
+                onFocus={(e) => e.target.select()}
                 className="w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-[14px] bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent"
                 placeholder="10"
               />
@@ -49,6 +50,7 @@ export default function WorkoutConfigForm({ workoutType, config, onChange }: Wor
                 id="targetReps"
                 value={config.targetReps || '12-15'}
                 onChange={(e) => handleChange('targetReps', e.target.value)}
+                onFocus={(e) => e.target.select()}
                 className="w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-[14px] bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent"
                 placeholder="12-15"
               />
@@ -66,6 +68,7 @@ export default function WorkoutConfigForm({ workoutType, config, onChange }: Wor
             min="1"
             value={config.numSets || 4}
             onChange={(e) => handleChange('numSets', parseInt(e.target.value) || 4)}
+            onFocus={(e) => e.target.select()}
             className="w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-[14px] bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent"
             placeholder="4"
           />
@@ -82,6 +85,7 @@ export default function WorkoutConfigForm({ workoutType, config, onChange }: Wor
               min="0"
               value={config.restTimer || 0}
               onChange={(e) => handleChange('restTimer', parseInt(e.target.value) || 0)}
+              onFocus={(e) => e.target.select()}
               className="w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-[14px] bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent"
               placeholder="45"
             />
@@ -97,6 +101,7 @@ export default function WorkoutConfigForm({ workoutType, config, onChange }: Wor
               min="1"
               value={config.workoutDuration || 60}
               onChange={(e) => handleChange('workoutDuration', parseInt(e.target.value) || 60)}
+              onFocus={(e) => e.target.select()}
               className="w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-[14px] bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent"
               placeholder="60"
             />

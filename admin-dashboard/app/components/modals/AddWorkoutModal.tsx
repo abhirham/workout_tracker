@@ -425,6 +425,7 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
                     id="workoutName"
                     value={newWorkoutName}
                     onChange={(e) => setNewWorkoutName(e.target.value)}
+                    onFocus={(e) => e.target.select()}
                     placeholder="e.g., Bench Press"
                     className="w-full px-4 py-2.5 border border-[#E2E8F0] rounded-lg text-[14px] bg-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent"
                   />
