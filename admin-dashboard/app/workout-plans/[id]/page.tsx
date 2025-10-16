@@ -32,6 +32,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import AddWorkoutModal from '@/app/components/modals/AddWorkoutModal';
+import BulkEditTargetRepsModal from '@/app/components/modals/BulkEditTargetRepsModal';
 
 interface Workout {
   id: string;
@@ -165,6 +166,7 @@ export default function EditPlanPage() {
 
   const [activeWeekIndex, setActiveWeekIndex] = useState(0);
   const [isAddWorkoutModalOpen, setIsAddWorkoutModalOpen] = useState(false);
+  const [isBulkEditRepsOpen, setIsBulkEditRepsOpen] = useState(false);
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
@@ -304,6 +306,53 @@ export default function EditPlanPage() {
     const newWeeks = plan.weeks.filter((_, idx) => idx !== activeWeekIndex);
     setPlan({ ...plan, weeks: newWeeks });
     setActiveWeekIndex(Math.max(0, activeWeekIndex - 1));
+  };
+
+  const getUniqueTargetReps = (): string[] => {
+    const currentWeek = plan.weeks[activeWeekIndex];
+    if (!currentWeek) return [];
+
+    const uniqueValues = new Set<string>();
+    currentWeek.days.forEach(day => {
+      day.workouts.forEach(workout => {
+        // Only include weight workouts with targetReps
+        if (workout.type === 'Weight' && workout.config.targetReps) {
+          uniqueValues.add(workout.config.targetReps);
+        }
+      });
+    });
+
+    return Array.from(uniqueValues).sort();
+  };
+
+  const handleBulkUpdateTargetReps = (mapping: Record<string, string>) => {
+    const currentWeek = plan.weeks[activeWeekIndex];
+    if (!currentWeek) return;
+
+    const updatedWeeks = [...plan.weeks];
+    const updatedDays = currentWeek.days.map(day => ({
+      ...day,
+      workouts: day.workouts.map(workout => {
+        // Only update weight workouts where a mapping exists
+        if (workout.type === 'Weight' && workout.config.targetReps && mapping[workout.config.targetReps]) {
+          return {
+            ...workout,
+            config: {
+              ...workout.config,
+              targetReps: mapping[workout.config.targetReps],
+            },
+          };
+        }
+        return workout;
+      }),
+    }));
+
+    updatedWeeks[activeWeekIndex] = {
+      ...currentWeek,
+      days: updatedDays,
+    };
+
+    setPlan({ ...plan, weeks: updatedWeeks });
   };
 
   const handleAddDay = () => {
@@ -771,15 +820,26 @@ export default function EditPlanPage() {
                 <h3 className="text-[16px] font-semibold text-[#000000]">Week {currentWeek.number}</h3>
                 <p className="text-[13px] text-[#64748B] mt-1">{currentWeek.days.length} days configured</p>
               </div>
-              <button
-                onClick={handleDeleteWeek}
-                className="px-4 py-2 text-[14px] font-medium text-[#DC2626] bg-white border border-[#FCA5A5] rounded-lg hover:bg-[#FEE2E2] transition-colors flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-                Delete Week
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsBulkEditRepsOpen(true)}
+                  className="px-4 py-2 text-[14px] font-medium text-[#000000] bg-white border border-[#E2E8F0] rounded-lg hover:bg-[#F8FAFC] transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Bulk Edit Reps
+                </button>
+                <button
+                  onClick={handleDeleteWeek}
+                  className="px-4 py-2 text-[14px] font-medium text-[#DC2626] bg-white border border-[#FCA5A5] rounded-lg hover:bg-[#FEE2E2] transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Delete Week
+                </button>
+              </div>
             </div>
 
             {/* Days Grid */}
@@ -875,6 +935,15 @@ export default function EditPlanPage() {
         onAdd={handleWorkoutAdded}
         editingWorkout={editingWorkout}
         mode={modalMode}
+      />
+
+      {/* Bulk Edit Target Reps Modal */}
+      <BulkEditTargetRepsModal
+        isOpen={isBulkEditRepsOpen}
+        onClose={() => setIsBulkEditRepsOpen(false)}
+        onUpdate={handleBulkUpdateTargetReps}
+        weekNumber={currentWeek?.number || 0}
+        currentValues={getUniqueTargetReps()}
       />
     </div>
   );
