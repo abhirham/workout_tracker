@@ -42,7 +42,7 @@ interface Workout {
   order?: number;
   config: {
     baseWeight?: number;
-    targetReps?: number;
+    targetReps?: string;
     numSets: number;
     restTimer?: number;
     workoutDuration?: number;

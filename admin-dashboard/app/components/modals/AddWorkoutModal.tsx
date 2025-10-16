@@ -16,7 +16,7 @@ interface GlobalWorkout {
 
 interface WorkoutConfig {
   baseWeight?: number;
-  targetReps?: number;
+  targetReps?: string;
   numSets: number;
   restTimer?: number;
   workoutDuration?: number;
@@ -48,7 +48,7 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
   const [workoutConfig, setWorkoutConfig] = useState<WorkoutConfig>({
     numSets: 4,
     baseWeight: 10,
-    targetReps: 12,
+    targetReps: '12-15',
     restTimer: 45,
   });
 
@@ -103,7 +103,7 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
     setWorkoutConfig({
       numSets: 4,
       baseWeight: 10,
-      targetReps: 12,
+      targetReps: '12-15',
       restTimer: 45,
     });
     onClose();
@@ -121,7 +121,7 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
       setWorkoutConfig({
         numSets: 4,
         baseWeight: 10,
-        targetReps: 12,
+        targetReps: '12-15',
         restTimer: 45,
       });
     }
@@ -141,7 +141,7 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
       setWorkoutConfig({
         numSets: 4,
         baseWeight: 10,
-        targetReps: 12,
+        targetReps: '12-15',
         restTimer: 45,
       });
     }
@@ -171,7 +171,7 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
       setWorkoutConfig({
         numSets: 4,
         baseWeight: 10,
-        targetReps: 12,
+        targetReps: '12-15',
         restTimer: 45,
       });
     }
@@ -381,7 +381,14 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
                   <label className="block text-[13px] font-semibold text-[#000000] mb-2">
                     Select Workout
                   </label>
-                  <WorkoutAutocomplete workouts={workouts} onSelect={handleWorkoutSelect} />
+                  <WorkoutAutocomplete
+                    workouts={workouts}
+                    onSelect={handleWorkoutSelect}
+                    onCreateNew={(searchTerm) => {
+                      setActiveTab('new');
+                      setNewWorkoutName(searchTerm);
+                    }}
+                  />
                 </div>
 
                 {/* Configuration Form */}

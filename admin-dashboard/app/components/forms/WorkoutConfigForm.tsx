@@ -4,7 +4,7 @@ interface WorkoutConfigFormProps {
   workoutType: 'Weight' | 'Timer';
   config: {
     baseWeight?: number;
-    targetReps?: number;
+    targetReps?: string;
     numSets: number;
     restTimer?: number;
     workoutDuration?: number;
@@ -13,7 +13,7 @@ interface WorkoutConfigFormProps {
 }
 
 export default function WorkoutConfigForm({ workoutType, config, onChange }: WorkoutConfigFormProps) {
-  const handleChange = (field: string, value: number) => {
+  const handleChange = (field: string, value: number | string) => {
     onChange({ ...config, [field]: value });
   };
 
@@ -45,13 +45,12 @@ export default function WorkoutConfigForm({ workoutType, config, onChange }: Wor
                 Target Reps
               </label>
               <input
-                type="number"
+                type="text"
                 id="targetReps"
-                min="1"
-                value={config.targetReps || 12}
-                onChange={(e) => handleChange('targetReps', parseInt(e.target.value) || 12)}
+                value={config.targetReps || '12-15'}
+                onChange={(e) => handleChange('targetReps', e.target.value)}
                 className="w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-[14px] bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent"
-                placeholder="12"
+                placeholder="12-15"
               />
             </div>
           </>
