@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import {
@@ -172,6 +172,9 @@ export default function EditPlanPage() {
   const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
   const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
 
+  // Track original plan state for change detection
+  const originalPlanRef = useRef<WorkoutPlan | null>(null);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -256,12 +259,16 @@ export default function EditPlanPage() {
         })
       );
 
-      setPlan({
+      const loadedPlan = {
         id: planDoc.id,
         name: planData.name || '',
         description: planData.description || '',
         weeks,
-      });
+      };
+
+      setPlan(loadedPlan);
+      // Store deep copy of original plan for change detection
+      originalPlanRef.current = JSON.parse(JSON.stringify(loadedPlan));
     } catch (error) {
       console.error('Error loading plan:', error);
       alert('Failed to load plan');
@@ -497,6 +504,50 @@ export default function EditPlanPage() {
     }
   };
 
+  // Helper functions for change detection
+  const hasWorkoutChanged = (w1: Workout, w2: Workout): boolean => {
+    return (
+      w1.name !== w2.name ||
+      w1.type !== w2.type ||
+      w1.order !== w2.order ||
+      w1.config.baseWeight !== w2.config.baseWeight ||
+      w1.config.targetReps !== w2.config.targetReps ||
+      w1.config.numSets !== w2.config.numSets ||
+      w1.config.restTimer !== w2.config.restTimer ||
+      w1.config.workoutDuration !== w2.config.workoutDuration ||
+      JSON.stringify(w1.muscleGroups) !== JSON.stringify(w2.muscleGroups) ||
+      JSON.stringify(w1.equipment) !== JSON.stringify(w2.equipment)
+    );
+  };
+
+  const hasDayChanged = (d1: Day, d2: Day): boolean => {
+    if (d1.name !== d2.name) return true;
+    if (d1.workouts.length !== d2.workouts.length) return true;
+
+    // Check if any workout changed
+    for (let i = 0; i < d1.workouts.length; i++) {
+      const originalWorkout = d2.workouts.find(w => w.id === d1.workouts[i].id);
+      if (!originalWorkout || hasWorkoutChanged(d1.workouts[i], originalWorkout)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const hasWeekChanged = (w1: Week, w2: Week): boolean => {
+    if (w1.number !== w2.number) return true;
+    if (w1.days.length !== w2.days.length) return true;
+
+    // Check if any day changed
+    for (let i = 0; i < w1.days.length; i++) {
+      const originalDay = w2.days.find(d => d.id === w1.days[i].id);
+      if (!originalDay || hasDayChanged(w1.days[i], originalDay)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const handleSave = async () => {
     try {
       if (!plan.name.trim()) {
@@ -521,12 +572,21 @@ export default function EditPlanPage() {
         });
         finalPlanId = planRef.id;
       } else {
-        await updateDoc(doc(db, 'workout_plans', finalPlanId), {
-          name: plan.name,
-          description: plan.description,
-          totalWeeks: plan.weeks.length,
-          updatedAt: Timestamp.now(),
-        });
+        // Only update plan document if changed
+        const originalPlan = originalPlanRef.current;
+        if (
+          !originalPlan ||
+          originalPlan.name !== plan.name ||
+          originalPlan.description !== plan.description ||
+          originalPlan.weeks.length !== plan.weeks.length
+        ) {
+          await updateDoc(doc(db, 'workout_plans', finalPlanId), {
+            name: plan.name,
+            description: plan.description,
+            totalWeeks: plan.weeks.length,
+            updatedAt: Timestamp.now(),
+          });
+        }
 
         // CLEANUP: Delete orphaned documents that were removed locally
         // Fetch existing weeks from Firestore
@@ -594,24 +654,58 @@ export default function EditPlanPage() {
       }
 
       // Save weeks, days, and workouts (nested subcollections)
+      const originalPlan = originalPlanRef.current;
+
       for (const week of plan.weeks) {
         const weekRef = doc(db, 'workout_plans', finalPlanId, 'weeks', week.id);
-        await setDoc(weekRef, {
-          weekNumber: week.number,
-          name: `Week ${week.number}`,
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now(),
-        });
+
+        // Check if week is new or changed
+        const originalWeek = originalPlan?.weeks.find(w => w.id === week.id);
+        const isNewWeek = !originalWeek;
+        const weekChanged = originalWeek && hasWeekChanged(week, originalWeek);
+
+        if (isNewWeek) {
+          // New week: use setDoc
+          await setDoc(weekRef, {
+            weekNumber: week.number,
+            name: `Week ${week.number}`,
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+          });
+        } else if (weekChanged && week.number !== originalWeek.number) {
+          // Week metadata changed: update only
+          await updateDoc(weekRef, {
+            weekNumber: week.number,
+            name: `Week ${week.number}`,
+            updatedAt: Timestamp.now(),
+          });
+        }
 
         // Save days for this week
         for (const day of week.days) {
           const dayRef = doc(db, 'workout_plans', finalPlanId, 'weeks', week.id, 'days', day.id);
-          await setDoc(dayRef, {
-            dayNumber: day.name.match(/\d+/)?.[0] || '1',
-            name: day.name,
-            createdAt: Timestamp.now(),
-            updatedAt: Timestamp.now(),
-          });
+
+          // Check if day is new or changed
+          const originalDay = originalWeek?.days.find(d => d.id === day.id);
+          const isNewDay = !originalDay;
+          const dayChanged = originalDay && hasDayChanged(day, originalDay);
+
+          if (isNewDay) {
+            // New day: use setDoc
+            await setDoc(dayRef, {
+              dayNumber: day.name.match(/\d+/)?.[0] || '1',
+              name: day.name,
+              createdAt: Timestamp.now(),
+              updatedAt: Timestamp.now(),
+            });
+          } else if (dayChanged && day.name !== originalDay.name) {
+            // Day name changed: update only
+            await updateDoc(dayRef, {
+              dayNumber: day.name.match(/\d+/)?.[0] || '1',
+              name: day.name,
+              updatedAt: Timestamp.now(),
+            });
+          }
 
           // Save workouts for this day
           for (const workout of day.workouts) {
@@ -626,25 +720,56 @@ export default function EditPlanPage() {
               'workouts',
               workout.id
             );
-            await setDoc(workoutRef, {
-              name: workout.name,
-              type: workout.type,
-              muscleGroups: workout.muscleGroups || [],
-              equipment: workout.equipment || [],
-              order: day.workouts.indexOf(workout) + 1,
-              numSets: workout.config.numSets,
-              targetReps: workout.config.targetReps || null,
-              baseWeight: workout.config.baseWeight || null,
-              restTimerSeconds: workout.config.restTimer || null,
-              workoutDurationSeconds: workout.config.workoutDuration || null,
-              createdAt: Timestamp.now(),
-              updatedAt: Timestamp.now(),
-            });
+
+            // Check if workout is new or changed
+            const originalWorkout = originalDay?.workouts.find(w => w.id === workout.id);
+            const isNewWorkout = !originalWorkout;
+            const workoutChanged = originalWorkout && hasWorkoutChanged(workout, originalWorkout);
+
+            // Calculate order
+            const order = day.workouts.indexOf(workout) + 1;
+
+            if (isNewWorkout) {
+              // New workout: use setDoc
+              await setDoc(workoutRef, {
+                name: workout.name,
+                type: workout.type,
+                muscleGroups: workout.muscleGroups || [],
+                equipment: workout.equipment || [],
+                order,
+                numSets: workout.config.numSets,
+                targetReps: workout.config.targetReps || null,
+                baseWeight: workout.config.baseWeight || null,
+                restTimerSeconds: workout.config.restTimer || null,
+                workoutDurationSeconds: workout.config.workoutDuration || null,
+                createdAt: Timestamp.now(),
+                updatedAt: Timestamp.now(),
+              });
+            } else if (workoutChanged) {
+              // Workout changed: update only changed fields
+              await updateDoc(workoutRef, {
+                name: workout.name,
+                type: workout.type,
+                muscleGroups: workout.muscleGroups || [],
+                equipment: workout.equipment || [],
+                order,
+                numSets: workout.config.numSets,
+                targetReps: workout.config.targetReps || null,
+                baseWeight: workout.config.baseWeight || null,
+                restTimerSeconds: workout.config.restTimer || null,
+                workoutDurationSeconds: workout.config.workoutDuration || null,
+                updatedAt: Timestamp.now(),
+              });
+            }
           }
         }
       }
 
       alert('Plan saved successfully!');
+
+      // Update original plan ref for next save comparison
+      const updatedPlan = { ...plan, id: finalPlanId };
+      originalPlanRef.current = JSON.parse(JSON.stringify(updatedPlan));
 
       // Redirect to edit page if it was a new plan
       if (isNewPlan) {
