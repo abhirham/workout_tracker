@@ -74,8 +74,32 @@ export default function WorkoutAutocomplete({ workouts, onSelect, onCreateNew, p
         />
       </div>
 
-      {isOpen && filteredWorkouts.length > 0 && (
+      {isOpen && searchTerm && (
         <div className="absolute z-50 w-full mt-2 bg-white border border-[#E2E8F0] rounded-lg shadow-lg max-h-[300px] overflow-y-auto">
+          {/* Always show "Create new workout" as first option when onCreateNew is provided */}
+          {onCreateNew && (
+            <button
+              onClick={() => {
+                onCreateNew(searchTerm);
+                setIsOpen(false);
+              }}
+              className="w-full px-4 py-3 flex items-center gap-2 hover:bg-[#F8FAFC] transition-colors text-left border-b border-[#E2E8F0]"
+            >
+              <svg className="w-5 h-5 text-[#2563EB]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <div>
+                <div className="text-[14px] font-semibold text-[#2563EB]">
+                  Create new workout
+                </div>
+                <div className="text-[13px] text-[#64748B] mt-0.5">
+                  "{searchTerm}"
+                </div>
+              </div>
+            </button>
+          )}
+
+          {/* Show matching workouts */}
           {filteredWorkouts.map((workout) => (
             <button
               key={workout.id}
@@ -102,30 +126,6 @@ export default function WorkoutAutocomplete({ workouts, onSelect, onCreateNew, p
               </span>
             </button>
           ))}
-        </div>
-      )}
-
-      {isOpen && filteredWorkouts.length === 0 && searchTerm && onCreateNew && (
-        <div className="absolute z-50 w-full mt-2 bg-white border border-[#E2E8F0] rounded-lg shadow-lg">
-          <button
-            onClick={() => {
-              onCreateNew(searchTerm);
-              setIsOpen(false);
-            }}
-            className="w-full px-4 py-3 flex items-center gap-2 hover:bg-[#F8FAFC] transition-colors text-left rounded-lg"
-          >
-            <svg className="w-5 h-5 text-[#2563EB]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            <div>
-              <div className="text-[14px] font-semibold text-[#2563EB]">
-                Create new workout
-              </div>
-              <div className="text-[13px] text-[#64748B] mt-0.5">
-                "{searchTerm}"
-              </div>
-            </div>
-          </button>
         </div>
       )}
     </div>
