@@ -486,7 +486,12 @@ export default function EditPlanPage() {
     const newIndex = day.workouts.findIndex(w => w.id === over.id);
 
     if (oldIndex !== -1 && newIndex !== -1) {
-      const reorderedWorkouts = arrayMove(day.workouts, oldIndex, newIndex);
+      // Reorder workouts AND update their order property
+      const reorderedWorkouts = arrayMove(day.workouts, oldIndex, newIndex)
+        .map((workout, index) => ({
+          ...workout,
+          order: index + 1  // Update order property to match new position
+        }));
 
       const updatedWeeks = [...plan.weeks];
       const updatedDays = [...currentWeek.days];
