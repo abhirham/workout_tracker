@@ -17,6 +17,90 @@ interface WorkoutAutocompleteProps {
   placeholder?: string;
 }
 
+interface MatchScore {
+  workout: GlobalWorkout;
+  isExactSubstring: boolean;
+  startPosition: number;
+  consecutiveChars: number;
+  totalGaps: number;
+}
+
+// Subsequence matching with scoring
+function getSubsequenceMatchScore(searchTerm: string, workoutName: string): MatchScore | null {
+  const search = searchTerm.toLowerCase();
+  const name = workoutName.toLowerCase();
+
+  let searchIndex = 0;
+  let nameIndex = 0;
+  let startPosition = -1;
+  let consecutiveChars = 0;
+  let currentConsecutive = 0;
+  let totalGaps = 0;
+  let lastMatchIndex = -1;
+
+  while (searchIndex < search.length && nameIndex < name.length) {
+    if (search[searchIndex] === name[nameIndex]) {
+      if (startPosition === -1) {
+        startPosition = nameIndex;
+      }
+
+      // Track consecutive matches
+      if (lastMatchIndex === nameIndex - 1) {
+        currentConsecutive++;
+      } else {
+        consecutiveChars = Math.max(consecutiveChars, currentConsecutive);
+        currentConsecutive = 1;
+        if (lastMatchIndex !== -1) {
+          totalGaps += (nameIndex - lastMatchIndex - 1);
+        }
+      }
+
+      lastMatchIndex = nameIndex;
+      searchIndex++;
+    }
+    nameIndex++;
+  }
+
+  // Not a match if we didn't find all search characters
+  if (searchIndex < search.length) {
+    return null;
+  }
+
+  consecutiveChars = Math.max(consecutiveChars, currentConsecutive);
+
+  // Check if it's an exact substring match
+  const isExactSubstring = name.includes(search);
+
+  return {
+    workout: { id: '', name: workoutName, type: 'Weight', muscleGroups: [], equipment: [] }, // Placeholder, will be replaced
+    isExactSubstring,
+    startPosition,
+    consecutiveChars,
+    totalGaps
+  };
+}
+
+// Sort matches by quality (best first)
+function sortByMatchQuality(a: MatchScore, b: MatchScore): number {
+  // 1. Exact substring matches first
+  if (a.isExactSubstring !== b.isExactSubstring) {
+    return a.isExactSubstring ? -1 : 1;
+  }
+
+  // 2. Earlier start position
+  if (a.startPosition !== b.startPosition) {
+    return a.startPosition - b.startPosition;
+  }
+
+  // 3. More consecutive characters
+  if (a.consecutiveChars !== b.consecutiveChars) {
+    return b.consecutiveChars - a.consecutiveChars;
+  }
+
+  // 4. Fewer gaps
+  return a.totalGaps - b.totalGaps;
+}
+
 export default function WorkoutAutocomplete({ workouts, onSelect, onCreateNew, placeholder = 'Search workouts...' }: WorkoutAutocompleteProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredWorkouts, setFilteredWorkouts] = useState<GlobalWorkout[]>([]);
@@ -24,11 +108,25 @@ export default function WorkoutAutocomplete({ workouts, onSelect, onCreateNew, p
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (searchTerm.trim()) {
-      const filtered = workouts.filter(w =>
-        w.name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      setFilteredWorkouts(filtered);
+    const trimmed = searchTerm.trim();
+
+    // Minimum 3 characters required
+    if (trimmed.length >= 3) {
+      const matches: MatchScore[] = [];
+
+      for (const workout of workouts) {
+        const score = getSubsequenceMatchScore(trimmed, workout.name);
+        if (score) {
+          score.workout = workout; // Replace placeholder with actual workout
+          matches.push(score);
+        }
+      }
+
+      // Sort by match quality and limit to 5 results
+      matches.sort(sortByMatchQuality);
+      const topMatches = matches.slice(0, 5).map(m => m.workout);
+
+      setFilteredWorkouts(topMatches);
       setIsOpen(true);
     } else {
       setFilteredWorkouts([]);
