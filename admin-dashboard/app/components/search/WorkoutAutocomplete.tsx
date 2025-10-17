@@ -15,6 +15,8 @@ interface WorkoutAutocompleteProps {
   onSelect: (workout: GlobalWorkout) => void;
   onCreateNew?: (searchTerm: string) => void;
   placeholder?: string;
+  value?: string;
+  onChange?: (value: string) => void;
 }
 
 interface MatchScore {
@@ -101,11 +103,15 @@ function sortByMatchQuality(a: MatchScore, b: MatchScore): number {
   return a.totalGaps - b.totalGaps;
 }
 
-export default function WorkoutAutocomplete({ workouts, onSelect, onCreateNew, placeholder = 'Search workouts...' }: WorkoutAutocompleteProps) {
-  const [searchTerm, setSearchTerm] = useState('');
+export default function WorkoutAutocomplete({ workouts, onSelect, onCreateNew, placeholder = 'Search workouts...', value, onChange }: WorkoutAutocompleteProps) {
+  const [internalSearchTerm, setInternalSearchTerm] = useState('');
   const [filteredWorkouts, setFilteredWorkouts] = useState<GlobalWorkout[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Use controlled value if provided, otherwise use internal state
+  const searchTerm = value !== undefined ? value : internalSearchTerm;
+  const setSearchTerm = onChange || setInternalSearchTerm;
 
   useEffect(() => {
     const trimmed = searchTerm.trim();

@@ -66,11 +66,11 @@ export default function WorkoutConfigForm({ workoutType, config, onChange }: Wor
             type="number"
             id="numSets"
             min="1"
-            value={config.numSets || 4}
-            onChange={(e) => handleChange('numSets', parseInt(e.target.value) || 4)}
+            value={config.numSets || 3}
+            onChange={(e) => handleChange('numSets', parseInt(e.target.value) || 3)}
             onFocus={(e) => e.target.select()}
             className="w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-[14px] bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent"
-            placeholder="4"
+            placeholder="3"
           />
         </div>
 

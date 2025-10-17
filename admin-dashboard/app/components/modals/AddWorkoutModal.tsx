@@ -48,7 +48,7 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
   const [activeTab, setActiveTab] = useState<'existing' | 'new'>('existing');
   const [selectedWorkout, setSelectedWorkout] = useState<GlobalWorkout | null>(null);
   const [workoutConfig, setWorkoutConfig] = useState<WorkoutConfig>({
-    numSets: 4,
+    numSets: 3,
     baseWeight: 10,
     targetReps: '12-15',
     restTimer: 45,
@@ -59,6 +59,9 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
   const [newWorkoutType, setNewWorkoutType] = useState<'Weight' | 'Timer'>('Weight');
   const [selectedMuscleGroups, setSelectedMuscleGroups] = useState<string[]>([]);
   const [selectedEquipment, setSelectedEquipment] = useState<string[]>([]);
+
+  // For "Select Existing" tab - autocomplete search
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Fetch all global workouts
   const [workouts, setWorkouts] = useState<GlobalWorkout[]>([]);
@@ -98,12 +101,13 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
     // Reset state
     setActiveTab('existing');
     setSelectedWorkout(null);
+    setSearchTerm('');
     setNewWorkoutName('');
     setNewWorkoutType('Weight');
     setSelectedMuscleGroups([]);
     setSelectedEquipment([]);
     setWorkoutConfig({
-      numSets: 4,
+      numSets: 3,
       baseWeight: 10,
       targetReps: '12-15',
       restTimer: 45,
@@ -121,7 +125,7 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
       });
     } else {
       setWorkoutConfig({
-        numSets: 4,
+        numSets: 3,
         baseWeight: 10,
         targetReps: '12-15',
         restTimer: 45,
@@ -138,10 +142,11 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
         config: workoutConfig,
       });
 
-      // Reset selection and config but keep modal open
+      // Reset selection, search term, and config but keep modal open
       setSelectedWorkout(null);
+      setSearchTerm('');
       setWorkoutConfig({
-        numSets: 4,
+        numSets: 3,
         baseWeight: 10,
         targetReps: '12-15',
         restTimer: 45,
@@ -171,7 +176,7 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
       });
     } else {
       setWorkoutConfig({
-        numSets: 4,
+        numSets: 3,
         baseWeight: 10,
         targetReps: '12-15',
         restTimer: 45,
@@ -291,6 +296,12 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
         setNewWorkoutName('');
         setSelectedMuscleGroups([]);
         setSelectedEquipment([]);
+        setWorkoutConfig({
+          numSets: 3,
+          baseWeight: 10,
+          targetReps: '12-15',
+          restTimer: 45,
+        });
       } catch (error) {
         console.error('Error creating workout:', error);
         toast.error('Failed to create workout');
@@ -390,6 +401,8 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
                       setActiveTab('new');
                       setNewWorkoutName(searchTerm);
                     }}
+                    value={searchTerm}
+                    onChange={setSearchTerm}
                   />
                 </div>
 
