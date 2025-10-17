@@ -5,6 +5,7 @@ import { db } from '@/lib/firebase';
 import { collection, addDoc, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
 import WorkoutAutocomplete from '../search/WorkoutAutocomplete';
 import WorkoutConfigForm from '../forms/WorkoutConfigForm';
+import { useToast } from '@/app/context/ToastContext';
 
 interface GlobalWorkout {
   id: string;
@@ -43,6 +44,7 @@ const MUSCLE_GROUPS = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Biceps', '
 const EQUIPMENT = ['Barbell', 'Dumbbell', 'Bench', 'Bodyweight', 'Machine', 'Pull-up Bar', 'Dip Bar', 'None'];
 
 export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout = null, mode = 'add' }: AddWorkoutModalProps) {
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState<'existing' | 'new'>('existing');
   const [selectedWorkout, setSelectedWorkout] = useState<GlobalWorkout | null>(null);
   const [workoutConfig, setWorkoutConfig] = useState<WorkoutConfig>({
@@ -204,7 +206,7 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
       );
 
       if (duplicate) {
-        alert(`A workout named "${duplicate.name}" already exists. Please use a different name or select it from the "Select Existing" tab.`);
+        toast.warning(`A workout named "${duplicate.name}" already exists. Please use a different name or select it from the "Select Existing" tab.`);
         return;
       }
 
@@ -234,7 +236,7 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
         handleClose();
       } catch (error) {
         console.error('Error creating workout:', error);
-        alert('Failed to create workout');
+        toast.error('Failed to create workout');
       }
     }
   };
@@ -248,7 +250,7 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
       );
 
       if (duplicate) {
-        alert(`A workout named "${duplicate.name}" already exists. Please use a different name or select it from the "Select Existing" tab.`);
+        toast.warning(`A workout named "${duplicate.name}" already exists. Please use a different name or select it from the "Select Existing" tab.`);
         return;
       }
 
@@ -291,7 +293,7 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
         setSelectedEquipment([]);
       } catch (error) {
         console.error('Error creating workout:', error);
-        alert('Failed to create workout');
+        toast.error('Failed to create workout');
       }
     }
   };

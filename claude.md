@@ -489,7 +489,7 @@ IMMEDIATELY after implementing any front-end change in admin-dashboard:
 
 1. **Identify what changed** – Review the modified components/pages
 2. **Navigate to affected pages** – Use `mcp__playwright__browser_navigate` to visit each changed view
-3. **Verify design compliance** – Compare against `admin-dashboard/context/design-principles.md`
+3. **Always reference**: `admin-dashboard/context/style-guide.md` for visual styling, colors, typography, and component patterns
 4. **Validate feature implementation** – Ensure the change fulfills the user's specific request
 5. **Check acceptance criteria** – Review any provided context files or requirements
 6. **Compare against design mockups** – Reference the design files below to ensure UI matches:

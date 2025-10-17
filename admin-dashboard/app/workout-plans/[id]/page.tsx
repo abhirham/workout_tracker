@@ -33,6 +33,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import AddWorkoutModal from '@/app/components/modals/AddWorkoutModal';
 import BulkEditTargetRepsModal from '@/app/components/modals/BulkEditTargetRepsModal';
+import { useToast } from '@/app/context/ToastContext';
+import { useConfirm } from '@/app/hooks/useConfirm';
 
 interface Workout {
   id: string;
@@ -156,6 +158,8 @@ export default function EditPlanPage() {
   const router = useRouter();
   const params = useParams();
   const planId = params.id as string;
+  const toast = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const [plan, setPlan] = useState<WorkoutPlan>({
     id: planId === 'new' ? '' : planId,
@@ -195,7 +199,7 @@ export default function EditPlanPage() {
       // Fetch plan document
       const planDoc = await getDoc(doc(db, 'workout_plans', planId));
       if (!planDoc.exists()) {
-        alert('Plan not found');
+        toast.error('Plan not found');
         router.push('/workout-plans');
         return;
       }
@@ -271,7 +275,7 @@ export default function EditPlanPage() {
       originalPlanRef.current = JSON.parse(JSON.stringify(loadedPlan));
     } catch (error) {
       console.error('Error loading plan:', error);
-      alert('Failed to load plan');
+      toast.error('Failed to load plan');
     } finally {
       setLoading(false);
     }
@@ -303,12 +307,20 @@ export default function EditPlanPage() {
     setPlan({ ...plan, weeks: [...plan.weeks, copiedWeek] });
   };
 
-  const handleDeleteWeek = () => {
+  const handleDeleteWeek = async () => {
     if (plan.weeks.length <= 1) {
-      alert('Cannot delete the last week');
+      toast.warning('Cannot delete the last week');
       return;
     }
-    if (!confirm('Are you sure you want to delete this week?')) return;
+
+    const confirmed = await confirm({
+      title: 'Delete Week',
+      message: 'Are you sure you want to delete this week?',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+
+    if (!confirmed) return;
 
     const newWeeks = plan.weeks.filter((_, idx) => idx !== activeWeekIndex);
     setPlan({ ...plan, weeks: newWeeks });
@@ -381,8 +393,15 @@ export default function EditPlanPage() {
   };
 
 
-  const handleDeleteDay = (dayId: string) => {
-    if (!confirm('Are you sure you want to delete this day?')) return;
+  const handleDeleteDay = async (dayId: string) => {
+    const confirmed = await confirm({
+      title: 'Delete Day',
+      message: 'Are you sure you want to delete this day?',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+
+    if (!confirmed) return;
 
     const currentWeek = plan.weeks[activeWeekIndex];
     if (!currentWeek) return;
@@ -446,8 +465,15 @@ export default function EditPlanPage() {
     setPlan({ ...plan, weeks: updatedWeeks });
   };
 
-  const handleDeleteWorkout = (dayId: string, workoutId: string) => {
-    if (!confirm('Are you sure you want to delete this workout?')) return;
+  const handleDeleteWorkout = async (dayId: string, workoutId: string) => {
+    const confirmed = await confirm({
+      title: 'Delete Workout',
+      message: 'Are you sure you want to delete this workout?',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+
+    if (!confirmed) return;
 
     const currentWeek = plan.weeks[activeWeekIndex];
     if (!currentWeek) return;
@@ -556,7 +582,7 @@ export default function EditPlanPage() {
   const handleSave = async () => {
     try {
       if (!plan.name.trim()) {
-        alert('Please enter a plan name');
+        toast.warning('Please enter a plan name');
         return;
       }
 
@@ -770,7 +796,7 @@ export default function EditPlanPage() {
         }
       }
 
-      alert('Plan saved successfully!');
+      toast.success('Plan saved successfully!');
 
       // Update original plan ref for next save comparison
       const updatedPlan = { ...plan, id: finalPlanId };
@@ -782,7 +808,7 @@ export default function EditPlanPage() {
       }
     } catch (error) {
       console.error('Error saving plan:', error);
-      alert('Failed to save plan. Please try again.');
+      toast.error('Failed to save plan. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -812,7 +838,9 @@ export default function EditPlanPage() {
   }
 
   return (
-    <div className="space-y-6 pb-16">
+    <>
+      <ConfirmDialog />
+      <div className="space-y-6 pb-16">
       {/* Back Button */}
       <button
         onClick={() => router.push('/workout-plans')}
@@ -1076,5 +1104,6 @@ export default function EditPlanPage() {
         currentValues={getUniqueTargetReps()}
       />
     </div>
+    </>
   );
 }

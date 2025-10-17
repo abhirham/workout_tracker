@@ -8,6 +8,7 @@ import {
   query,
   orderBy,
 } from 'firebase/firestore';
+import { useToast } from '@/app/context/ToastContext';
 
 interface User {
   id: string;
@@ -22,6 +23,7 @@ interface User {
 }
 
 export default function UsersPage() {
+  const toast = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -129,7 +131,7 @@ export default function UsersPage() {
       setUsers(mockUsers);
     } catch (error) {
       console.error('Error fetching users:', error);
-      alert('Failed to fetch users');
+      toast.error('Failed to fetch users');
     } finally {
       setLoading(false);
     }

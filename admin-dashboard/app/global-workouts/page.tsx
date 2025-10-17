@@ -14,6 +14,8 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { checkGlobalWorkoutReferences } from '@/lib/firestore-helpers';
+import { useToast } from '@/app/context/ToastContext';
+import { useConfirm } from '@/app/hooks/useConfirm';
 
 type WorkoutType = 'Weight' | 'Timer';
 
@@ -30,6 +32,8 @@ interface GlobalWorkout {
 }
 
 export default function GlobalWorkoutsPage() {
+  const toast = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
   const [workouts, setWorkouts] = useState<GlobalWorkout[]>([]);
   const [filteredWorkouts, setFilteredWorkouts] = useState<GlobalWorkout[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +84,7 @@ export default function GlobalWorkoutsPage() {
       setFilteredWorkouts(workoutsData);
     } catch (error) {
       console.error('Error fetching workouts:', error);
-      alert('Failed to fetch workouts');
+      toast.error('Failed to fetch workouts');
     } finally {
       setLoading(false);
     }
@@ -171,9 +175,10 @@ export default function GlobalWorkoutsPage() {
       }
       await fetchWorkouts();
       handleCloseModal();
+      toast.success(editingWorkout ? 'Workout updated successfully' : 'Workout created successfully');
     } catch (error) {
       console.error('Error saving workout:', error);
-      alert('Failed to save workout');
+      toast.error('Failed to save workout');
     }
   };
 
@@ -186,22 +191,32 @@ export default function GlobalWorkoutsPage() {
 
       if (references.isReferenced) {
         const plansList = references.planNames.join(', ');
-        alert(
-          `Cannot delete "${workoutName}" because it is used in ${references.planCount} workout plan(s):\n\n${plansList}\n\nPlease remove the workout from these plans before deleting it.`
+        toast.error(
+          `Cannot delete "${workoutName}" because it is used in ${references.planCount} workout plan(s): ${plansList}. Please remove the workout from these plans before deleting it.`
         );
+        setLoading(false);
         return;
       }
 
       // Confirm deletion if no references found
-      if (!confirm(`Are you sure you want to delete "${workoutName}"? This action cannot be undone.`)) {
+      const confirmed = await confirm({
+        title: 'Delete Workout',
+        message: `Are you sure you want to delete "${workoutName}"? This action cannot be undone.`,
+        confirmLabel: 'Delete',
+        variant: 'danger',
+      });
+
+      if (!confirmed) {
+        setLoading(false);
         return;
       }
 
       await deleteDoc(doc(db, 'global_workouts', id));
       await fetchWorkouts();
+      toast.success('Workout deleted successfully');
     } catch (error) {
       console.error('Error deleting workout:', error);
-      alert('Failed to delete workout. Please try again.');
+      toast.error('Failed to delete workout. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -214,9 +229,10 @@ export default function GlobalWorkoutsPage() {
         updatedAt: Timestamp.now(),
       });
       await fetchWorkouts();
+      toast.success(`Workout ${workout.isActive ? 'deactivated' : 'activated'} successfully`);
     } catch (error) {
       console.error('Error toggling active status:', error);
-      alert('Failed to update workout status');
+      toast.error('Failed to update workout status');
     }
   };
 
@@ -232,7 +248,9 @@ export default function GlobalWorkoutsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      <ConfirmDialog />
+      <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -524,5 +542,6 @@ export default function GlobalWorkoutsPage() {
         </div>
       )}
     </div>
+    </>
   );
 }

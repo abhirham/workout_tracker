@@ -14,6 +14,8 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { deleteWorkoutPlanWithSubcollections } from '@/lib/firestore-helpers';
+import { useToast } from '@/app/context/ToastContext';
+import { useConfirm } from '@/app/hooks/useConfirm';
 
 interface WorkoutPlan {
   id: string;
@@ -26,6 +28,8 @@ interface WorkoutPlan {
 }
 
 export default function WorkoutPlansPage() {
+  const toast = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
   const [plans, setPlans] = useState<WorkoutPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -63,7 +67,7 @@ export default function WorkoutPlansPage() {
       setPlans(plansData);
     } catch (error) {
       console.error('Error fetching plans:', error);
-      alert('Failed to fetch workout plans');
+      toast.error('Failed to fetch workout plans');
     } finally {
       setLoading(false);
     }
@@ -76,23 +80,32 @@ export default function WorkoutPlansPage() {
         updatedAt: Timestamp.now(),
       });
       await fetchPlans();
+      toast.success(`Plan ${plan.isActive ? 'deactivated' : 'activated'} successfully`);
     } catch (error) {
       console.error('Error toggling active status:', error);
-      alert('Failed to update plan status');
+      toast.error('Failed to update plan status');
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this plan? This will permanently delete all weeks, days, and workouts.')) return;
+    const confirmed = await confirm({
+      title: 'Delete Workout Plan',
+      message: 'Are you sure you want to delete this plan? This will permanently delete all weeks, days, and workouts.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+
+    if (!confirmed) return;
 
     try {
       setLoading(true);
       // Use cascade deletion to remove all subcollections
       await deleteWorkoutPlanWithSubcollections(id);
       await fetchPlans();
+      toast.success('Workout plan deleted successfully');
     } catch (error) {
       console.error('Error deleting plan:', error);
-      alert('Failed to delete workout plan. Please try again.');
+      toast.error('Failed to delete workout plan. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -114,7 +127,9 @@ export default function WorkoutPlansPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      <ConfirmDialog />
+      <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -241,5 +256,6 @@ export default function WorkoutPlansPage() {
         </div>
       )}
     </div>
+    </>
   );
 }
