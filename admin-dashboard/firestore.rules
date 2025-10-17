@@ -11,7 +11,8 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() &&
              exists(/databases/$(database)/documents/users/$(request.auth.token.email)) &&
-             get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.isAdmin == true;
+             get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.isAdmin == true &&
+             get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.isActive == true;
     }
 
     // Users collection - Admin only access

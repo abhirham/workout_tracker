@@ -16,6 +16,7 @@ import { useToast } from './ToastContext';
 interface UserData {
   email: string;
   isAdmin: boolean;
+  isActive: boolean;
   createdAt: any;
   lastLoginAt?: any;
   displayName?: string;
@@ -103,6 +104,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      if (!userData.isActive) {
+        toast.error('Your account has been deactivated. Please contact an administrator.');
+        await firebaseSignOut(auth);
+        return;
+      }
+
       if (!userData.isAdmin) {
         toast.error('Admin access required. Please use the mobile app instead.');
         await firebaseSignOut(auth);
@@ -146,11 +153,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Fetch user data from Firestore
         const userData = await fetchUserData(user);
 
-        if (userData && userData.isAdmin) {
+        if (userData && userData.isAdmin && userData.isActive) {
           setUser(user);
           setUserData(userData);
         } else {
-          // User not authorized or not admin
+          // User not authorized, not admin, or inactive
           setUser(null);
           setUserData(null);
           await firebaseSignOut(auth);
