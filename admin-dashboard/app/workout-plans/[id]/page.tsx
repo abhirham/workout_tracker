@@ -179,6 +179,9 @@ export default function EditPlanPage() {
   // Track original plan state for change detection
   const originalPlanRef = useRef<WorkoutPlan | null>(null);
 
+  // Ref for file input
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -824,6 +827,217 @@ export default function EditPlanPage() {
     link.click();
   };
 
+  const validateImportedPlan = (data: any): { valid: boolean; error?: string; plan?: WorkoutPlan } => {
+    try {
+      // Check if data is an object
+      if (!data || typeof data !== 'object') {
+        return { valid: false, error: 'Invalid JSON structure' };
+      }
+
+      // Check required fields
+      if (!data.name || typeof data.name !== 'string') {
+        return { valid: false, error: 'Missing required field: name' };
+      }
+
+      if (!Array.isArray(data.weeks)) {
+        return { valid: false, error: 'Missing required field: weeks (must be an array)' };
+      }
+
+      // Validate weeks
+      for (let weekIdx = 0; weekIdx < data.weeks.length; weekIdx++) {
+        const week = data.weeks[weekIdx];
+
+        if (!week || typeof week !== 'object') {
+          return { valid: false, error: `Invalid week structure at index ${weekIdx}` };
+        }
+
+        if (typeof week.number !== 'number') {
+          return { valid: false, error: `Invalid week number at index ${weekIdx}` };
+        }
+
+        if (!Array.isArray(week.days)) {
+          return { valid: false, error: `Week ${weekIdx + 1}: days must be an array` };
+        }
+
+        // Validate days
+        for (let dayIdx = 0; dayIdx < week.days.length; dayIdx++) {
+          const day = week.days[dayIdx];
+
+          if (!day || typeof day !== 'object') {
+            return { valid: false, error: `Week ${weekIdx + 1}: Invalid day structure at index ${dayIdx}` };
+          }
+
+          if (!day.name || typeof day.name !== 'string') {
+            return { valid: false, error: `Week ${weekIdx + 1}, Day ${dayIdx + 1}: Missing day name` };
+          }
+
+          if (!Array.isArray(day.workouts)) {
+            return { valid: false, error: `Week ${weekIdx + 1}, ${day.name}: workouts must be an array` };
+          }
+
+          // Validate workouts
+          for (let workoutIdx = 0; workoutIdx < day.workouts.length; workoutIdx++) {
+            const workout = day.workouts[workoutIdx];
+
+            if (!workout || typeof workout !== 'object') {
+              return { valid: false, error: `Week ${weekIdx + 1}, ${day.name}, Workout ${workoutIdx + 1}: Invalid workout structure` };
+            }
+
+            if (!workout.name || typeof workout.name !== 'string') {
+              return { valid: false, error: `Week ${weekIdx + 1}, ${day.name}, Workout ${workoutIdx + 1}: Missing workout name` };
+            }
+
+            if (workout.type !== 'Weight' && workout.type !== 'Timer') {
+              return { valid: false, error: `Week ${weekIdx + 1}, ${day.name}, ${workout.name}: Invalid type. Must be 'Weight' or 'Timer'` };
+            }
+
+            if (!Array.isArray(workout.muscleGroups)) {
+              return { valid: false, error: `Week ${weekIdx + 1}, ${day.name}, ${workout.name}: muscleGroups must be an array` };
+            }
+
+            if (!Array.isArray(workout.equipment)) {
+              return { valid: false, error: `Week ${weekIdx + 1}, ${day.name}, ${workout.name}: equipment must be an array` };
+            }
+
+            if (!workout.config || typeof workout.config !== 'object') {
+              return { valid: false, error: `Week ${weekIdx + 1}, ${day.name}, ${workout.name}: Missing config object` };
+            }
+
+            if (typeof workout.config.numSets !== 'number') {
+              return { valid: false, error: `Week ${weekIdx + 1}, ${day.name}, ${workout.name}: config.numSets must be a number` };
+            }
+
+            // Validate based on workout type
+            if (workout.type === 'Weight') {
+              if (workout.config.targetReps === undefined) {
+                return { valid: false, error: `Week ${weekIdx + 1}, ${day.name}, ${workout.name}: Weight workouts require targetReps` };
+              }
+            } else if (workout.type === 'Timer') {
+              if (typeof workout.config.workoutDuration !== 'number') {
+                return { valid: false, error: `Week ${weekIdx + 1}, ${day.name}, ${workout.name}: Timer workouts require workoutDuration (number)` };
+              }
+            }
+          }
+        }
+      }
+
+      // Generate new IDs to avoid collisions
+      const timestamp = Date.now();
+      const importedPlan: WorkoutPlan = {
+        id: '', // Will be assigned on save
+        name: data.name,
+        description: data.description || '',
+        weeks: data.weeks.map((week: any, weekIdx: number) => ({
+          id: `week-${timestamp}-${weekIdx}`,
+          number: week.number,
+          days: week.days.map((day: any, dayIdx: number) => ({
+            id: `day-${timestamp}-${weekIdx}-${dayIdx}`,
+            name: day.name,
+            workouts: day.workouts.map((workout: any, workoutIdx: number) => ({
+              id: `workout-${timestamp}-${weekIdx}-${dayIdx}-${workoutIdx}`,
+              name: workout.name,
+              type: workout.type,
+              muscleGroups: workout.muscleGroups || [],
+              equipment: workout.equipment || [],
+              order: workout.order || workoutIdx + 1,
+              config: {
+                baseWeight: workout.config.baseWeight,
+                targetReps: workout.config.targetReps,
+                numSets: workout.config.numSets,
+                restTimer: workout.config.restTimer,
+                workoutDuration: workout.config.workoutDuration,
+              },
+            })),
+          })),
+        })),
+      };
+
+      return { valid: true, plan: importedPlan };
+    } catch (error) {
+      return { valid: false, error: 'Failed to parse JSON file' };
+    }
+  };
+
+  const handleImportJSON = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Check file size (5MB limit)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      toast.error('File size exceeds 5MB limit');
+      return;
+    }
+
+    // Check file type
+    if (!file.name.endsWith('.json')) {
+      toast.error('Please select a JSON file');
+      return;
+    }
+
+    try {
+      const fileContent = await file.text();
+      const jsonData = JSON.parse(fileContent);
+
+      // Validate the imported data
+      const validation = validateImportedPlan(jsonData);
+
+      if (!validation.valid) {
+        toast.error(`Import failed: ${validation.error}`);
+        return;
+      }
+
+      if (!validation.plan) {
+        toast.error('Import failed: Invalid plan data');
+        return;
+      }
+
+      // Show confirmation dialog
+      const confirmed = await confirm({
+        title: 'Import Workout Plan',
+        message: `This will replace the current plan with "${validation.plan.name}" containing ${validation.plan.weeks.length} week(s). Continue?`,
+        confirmLabel: 'Import',
+        variant: 'default',
+      });
+
+      if (!confirmed) {
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+
+      // Load the imported plan into state
+      setPlan(validation.plan);
+      setActiveWeekIndex(0);
+
+      // Clear original plan ref so changes are detected
+      originalPlanRef.current = null;
+
+      toast.success(`Successfully imported "${validation.plan.name}". Click "Save Plan" to persist changes.`);
+
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error) {
+      console.error('Error importing JSON:', error);
+      toast.error('Failed to import JSON file. Please check the file format.');
+
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   const currentWeek = plan.weeks[activeWeekIndex];
 
   if (loading) {
@@ -852,6 +1066,15 @@ export default function EditPlanPage() {
         Back to Plans
       </button>
 
+      {/* Hidden file input for JSON import */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json,application/json"
+        onChange={handleFileSelected}
+        className="hidden"
+      />
+
       {/* Plan Overview */}
       <div className="bg-white rounded-lg border border-[#E2E8F0] p-8">
         <div className="flex items-start justify-between mb-6">
@@ -861,10 +1084,22 @@ export default function EditPlanPage() {
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={handleExportJSON}
-              className="px-4 py-2 text-[14px] font-medium text-[#000000] bg-white border border-[#E2E8F0] rounded-lg hover:bg-[#F8FAFC] transition-colors"
+              onClick={handleImportJSON}
+              className="px-4 py-2 text-[14px] font-medium text-[#000000] bg-white border border-[#E2E8F0] rounded-lg hover:bg-[#F8FAFC] transition-colors flex items-center gap-2"
             >
-              Export as JSON
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              Import JSON
+            </button>
+            <button
+              onClick={handleExportJSON}
+              className="px-4 py-2 text-[14px] font-medium text-[#000000] bg-white border border-[#E2E8F0] rounded-lg hover:bg-[#F8FAFC] transition-colors flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Export JSON
             </button>
             <button
               onClick={handleSave}
