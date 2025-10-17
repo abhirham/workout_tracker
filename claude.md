@@ -233,37 +233,53 @@ lib/
    - Previous/Next buttons to navigate between exercises
    - Finish button on last exercise returns to day selection
 
-### Admin Dashboard (🚧 Not yet implemented)
+### Admin Dashboard (✅ Fully Implemented)
 
-1. **Global Workouts Management:**
+1. **Global Workouts Management:** (✅ Implemented)
 
-   - View all global workouts
-   - Create new global workouts (name, type: weight/timer)
+   - View all global workouts with search and filtering
+   - Create new global workouts (name, type: weight/timer, muscle groups, equipment, search keywords)
    - Edit existing global workouts
-   - Delete global workouts (with cascade handling)
-   - Autocomplete/search functionality
+   - Delete global workouts (with cascade handling - checks for references in workout plans before deletion)
+   - Filter by workout type (Weight/Timer) and muscle group
+   - Search functionality by workout name
+   - Soft delete support (`isActive` flag)
 
-2. **Template Management:**
+2. **Template Management:** (✅ Implemented)
 
    - CRUD for WorkoutPlans (references global workouts)
    - Nested management: Plan → Week → Day → Workout
-   - Workout selection: Autocomplete dropdown from global workouts library
+   - Workout selection: Autocomplete dropdown from global workouts library with fuzzy search
    - Configure per workout: `baseWeights`, `targetReps`, `restTimerSeconds`, `workoutDurationSeconds`
    - Set alternative workout suggestions (`alternativeWorkouts[]` array)
    - Timer configuration (per-workout via `restTimerSeconds` and `workoutDurationSeconds`)
-   - Bulk operations (create 12 weeks at once, copy days)
-   - Import/export workout plans (JSON/CSV)
+   - Bulk operations: Bulk edit target reps across multiple weeks
+   - Copy weeks and days functionality
+   - Cascade deletion (deletes all nested weeks/days/workouts when plan is deleted)
+   - Import/export workout plans (🚧 Not yet implemented)
 
-3. **User Management:**
-   - View all users and their progress
-   - Analytics (completion rates per user)
-   - Activity log (recent completions)
-   - Individual user progress viewer
+3. **Admin User Management:** (✅ Implemented)
+
+   - Add/remove admin users (invite-only system)
+   - View all admin users with email, creation date, and last login
+   - Real-time updates via Firestore listeners
+   - Self-protection (admins cannot remove themselves)
+   - Note: This is for admin dashboard access only. Regular mobile app users are managed separately and not shown here.
+
+4. **Authentication & Authorization:** (✅ Implemented)
+   - Google OAuth login at `/login` page
+   - Admin-only access control (verifies `isAdmin: true` in Firestore `users` collection)
+   - Protected routes (all pages except `/login` require admin authentication)
+   - User info display (name, email, photo from Google account)
+   - Sign out functionality with dropdown menu
+   - Real-time auth state management
+   - Automatic verification on each request via Firestore security rules
 
 ### Current Implementation Status
 
 **✅ Fully Implemented:**
 
+**Mobile App:**
 - Local database with Drift (SQLite) - Schema v7
 - Global workouts library (22 workouts: 21 weight, 1 timer)
 - Workout plan seeding with 8 weeks of progressive overload
@@ -283,14 +299,35 @@ lib/
 - GlobalWorkoutRepository for CRUD operations
 - Updated repositories (CompletedSet, WorkoutAlternative) for new schema
 
+**Admin Dashboard:**
+- Google OAuth authentication with admin-only access control
+- Protected routes (all pages require admin auth except /login)
+- Admin user management (add/remove admins, invite-only system)
+- Global workouts CRUD (create, read, update, delete with cascade handling)
+- Workout plans CRUD with nested management (Plan → Week → Day → Workout)
+- Fuzzy search autocomplete for workout selection
+- Per-workout configuration (baseWeights, targetReps, rest/workout timers)
+- Alternative workouts suggestions management
+- Bulk edit operations (target reps across weeks)
+- Copy weeks and days functionality
+- Real-time Firestore listeners for live updates
+- Toast notifications for user feedback
+- Firestore security rules with helper functions
+
 **🚧 In Progress / Not Yet Implemented:**
 
-- Firebase integration (Auth, Firestore sync)
-- Admin dashboard (global workouts management, program builder)
-- User authentication
-- Background sync
+**Mobile App:**
+- Firebase Authentication integration
+- Firestore sync (templates and progress)
+- Background sync when online
 - Multi-user support beyond data structure
 - User profile management
+- Rest timer background support (not yet tested)
+
+**Admin Dashboard:**
+- Import/export workout plans (JSON/CSV)
+- Analytics dashboard for user progress viewing
+- Activity log for recent user completions
 
 **Current Data Flow:**
 
@@ -349,29 +386,73 @@ lib/
 
 ## Firebase Security Rules
 
-**Global Workouts (read-only for users):**
+Complete Firestore security rules as implemented in `admin-dashboard/firestore.rules`:
 
 ```javascript
-match /global_workouts/{workoutId} {
-  allow read: if request.auth != null;
-  allow write: if request.auth.token.admin == true;
-}
-```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
 
-**Template Collections (read-only for users):**
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
 
-```javascript
-match /workout_plans/{planId} {
-  allow read: if request.auth != null;
-  allow write: if request.auth.token.admin == true;
-}
-```
+    // Helper function to check if user is an admin
+    function isAdmin() {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.token.email)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.isAdmin == true;
+    }
 
-**User Progress (user-specific):**
+    // Users collection - Admin only access
+    match /users/{email} {
+      // Only admins can read the users collection
+      allow read: if isAdmin();
 
-```javascript
-match /user_progress/{userId}/{document=**} {
-  allow read, write: if request.auth.uid == userId;
+      // Only admins can create, update, or delete users
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Global workouts - Read for authenticated, write for admins only
+    match /global_workouts/{workoutId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Workout plans - Read for authenticated, write for admins only
+    match /workout_plans/{planId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+
+      // Nested collections within workout plans
+      match /weeks/{weekId} {
+        allow read: if isAuthenticated();
+        allow create, update, delete: if isAdmin();
+
+        match /days/{dayId} {
+          allow read: if isAuthenticated();
+          allow create, update, delete: if isAdmin();
+
+          match /workouts/{workoutId} {
+            allow read: if isAuthenticated();
+            allow create, update, delete: if isAdmin();
+          }
+        }
+      }
+    }
+
+    // User progress - User-specific read/write access
+    // (For mobile app users - not used in admin dashboard)
+    match /user_progress/{userId}/{document=**} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Deny all other access by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
 }
 ```
 
@@ -398,10 +479,13 @@ flutter pub run build_runner build --delete-conflicting-outputs
 
 - Do not expose user progress data across users (strict user-specific access)
 - Do not allow mobile users to modify global workout templates
+- Do not allow non-admin users to access the admin dashboard
+- Do not skip admin verification checks (always verify isAdmin flag in Firestore)
+- Do not allow admins to remove themselves from the users collection
 - Do not skip offline-first pattern (always write locally first)
 - Do not introduce input lag (no network calls on text input)
 - Do not use force push to main/master branch
-- Do not commit sensitive files (.env, credentials)
+- Do not commit sensitive files (.env, credentials, Firebase config)
 
 ## Testing Strategy
 
@@ -442,10 +526,14 @@ flutter pub run build_runner build --delete-conflicting-outputs
 
 **Admin Dashboard:**
 
-- Firebase Hosting (or Vercel/Netlify)
-- Production build optimization
-- SSL certificate
+- Next.js application deployed to Firebase Hosting (or Vercel/Netlify)
+- Production build: `npm run build` in admin-dashboard directory
+- Environment variables: Firebase config in `.env.local` (do not commit)
+- Firebase project: `bodyfit-b1563`
+- Requires admin users to be added to Firestore `/users` collection before login
+- SSL certificate (automatic with Firebase Hosting)
 - Custom domain (optional)
+- Google OAuth enabled in Firebase Console Authentication settings
 
 ## Version Control
 
