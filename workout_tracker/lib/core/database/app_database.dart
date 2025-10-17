@@ -188,7 +188,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration {
@@ -338,6 +338,41 @@ class AppDatabase extends _$AppDatabase {
           await m.createTable(completedSets);
           await m.createTable(workoutProgressTable);
           await m.createTable(workoutAlternatives);
+        }
+        if (from < 9) {
+          // Clean slate for Google Sign-In migration
+          // Clear all testing data with temp_user_id
+          // Keep global_workouts structure (will sync from Firestore)
+          // Keep user_profiles structure but clear data
+
+          // Use DELETE with IF EXISTS check (SQLite doesn't support IF EXISTS for DELETE)
+          // So we'll drop and recreate tables instead
+          await customStatement('DROP TABLE IF EXISTS completed_sets');
+          await customStatement('DROP TABLE IF EXISTS workout_progress');
+          await customStatement('DROP TABLE IF EXISTS workout_alternatives');
+          await customStatement('DROP TABLE IF EXISTS set_templates');
+          await customStatement('DROP TABLE IF EXISTS timer_configs');
+          await customStatement('DROP TABLE IF EXISTS workouts');
+          await customStatement('DROP TABLE IF EXISTS days');
+          await customStatement('DROP TABLE IF EXISTS weeks');
+          await customStatement('DROP TABLE IF EXISTS workout_plans');
+          await customStatement('DROP TABLE IF EXISTS user_profiles');
+          await customStatement('DROP TABLE IF EXISTS sync_queue');
+
+          // Recreate all tables with fresh schema
+          await m.createTable(workoutPlans);
+          await m.createTable(weeks);
+          await m.createTable(days);
+          await m.createTable(workouts);
+          await m.createTable(setTemplates);
+          await m.createTable(timerConfigs);
+          await m.createTable(userProfiles);
+          await m.createTable(completedSets);
+          await m.createTable(workoutProgressTable);
+          await m.createTable(workoutAlternatives);
+          await m.createTable(syncQueue);
+
+          // Note: global_workouts data will be re-seeded or synced from Firestore
         }
       },
     );

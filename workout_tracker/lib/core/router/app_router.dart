@@ -1,18 +1,68 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:workout_tracker/features/auth/presentation/login_screen.dart';
+import 'package:workout_tracker/features/sync/services/auth_service.dart';
 import 'package:workout_tracker/features/workout_plans/presentation/workout_plan_list_screen.dart';
 import 'package:workout_tracker/features/weeks/presentation/week_selection_screen.dart';
 import 'package:workout_tracker/features/days/presentation/day_selection_screen.dart';
 import 'package:workout_tracker/features/workouts/presentation/workout_list_screen.dart';
 
-final appRouter = GoRouter(
-  initialLocation: '/',
-  routes: [
-    GoRoute(
-      path: '/',
-      name: 'home',
-      builder: (context, state) => const WorkoutPlanListScreen(),
-    ),
+/// Helper class to convert a Stream into a ChangeNotifier for GoRouter
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    notifyListeners();
+    _subscription = stream.asBroadcastStream().listen((_) {
+      notifyListeners();
+    });
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
+
+// Router provider that requires ref for auth state
+final appRouterProvider = Provider<GoRouter>((ref) {
+  final authService = ref.watch(authServiceProvider);
+
+  return GoRouter(
+    initialLocation: '/login',
+    refreshListenable: GoRouterRefreshStream(authService.authStateChanges),
+    redirect: (context, state) {
+      final user = authService.currentUser;
+      final isAuth = user != null;
+      final isLoggingIn = state.matchedLocation == '/login';
+
+      // If not authenticated and not on login page, redirect to login
+      if (!isAuth && !isLoggingIn) {
+        return '/login';
+      }
+
+      // If authenticated and on login page, redirect to home
+      if (isAuth && isLoggingIn) {
+        return '/';
+      }
+
+      // No redirect needed
+      return null;
+    },
+    routes: [
+      GoRoute(
+        path: '/login',
+        name: 'login',
+        builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/',
+        name: 'home',
+        builder: (context, state) => const WorkoutPlanListScreen(),
+      ),
     GoRoute(
       path: '/plan/:planId/weeks',
       name: 'weeks',
@@ -57,5 +107,6 @@ final appRouter = GoRouter(
         );
       },
     ),
-  ],
-);
+    ],
+  );
+});

@@ -1,12 +1,15 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 part 'auth_service.g.dart';
 
 /// Service for Firebase Authentication
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   /// Get current user
   User? get currentUser => _auth.currentUser;
@@ -17,40 +20,67 @@ class AuthService {
   /// Stream of auth state changes
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  /// Sign in anonymously
-  Future<UserCredential> signInAnonymously() async {
+  /// Sign in with Google
+  Future<UserCredential> signInWithGoogle() async {
     try {
-      return await _auth.signInAnonymously();
+      // Trigger the Google Sign-In flow
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+
+      if (googleUser == null) {
+        // User cancelled the sign-in
+        throw Exception('Sign-in cancelled by user');
+      }
+
+      // Obtain the auth details from the request
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+      // Create a new credential
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // Sign in to Firebase with the Google credential
+      final userCredential = await _auth.signInWithCredential(credential);
+
+      // Store user ID in shared preferences for persistence
+      if (userCredential.user != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('userId', userCredential.user!.uid);
+      }
+
+      return userCredential;
     } catch (e) {
-      debugPrint('Error signing in anonymously: $e');
+      debugPrint('Error signing in with Google: $e');
       rethrow;
     }
+  }
+
+  /// Get user ID from auth or shared preferences
+  Future<String?> getUserId() async {
+    // First try to get from current auth state
+    if (_auth.currentUser != null) {
+      return _auth.currentUser!.uid;
+    }
+
+    // Fallback to shared preferences
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('userId');
   }
 
   /// Sign out
   Future<void> signOut() async {
     try {
+      await _googleSignIn.signOut();
       await _auth.signOut();
+
+      // Clear stored user ID
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('userId');
     } catch (e) {
       debugPrint('Error signing out: $e');
       rethrow;
     }
-  }
-
-  /// Ensure user is authenticated (sign in anonymously if not)
-  Future<User> ensureAuthenticated() async {
-    User? user = _auth.currentUser;
-
-    if (user == null) {
-      final credential = await signInAnonymously();
-      user = credential.user;
-    }
-
-    if (user == null) {
-      throw Exception('Failed to authenticate user');
-    }
-
-    return user;
   }
 }
 

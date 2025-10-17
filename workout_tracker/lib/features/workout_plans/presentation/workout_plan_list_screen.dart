@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:workout_tracker/core/database/database_provider.dart';
+import 'package:workout_tracker/features/sync/services/auth_service.dart';
 
 class WorkoutPlanListScreen extends ConsumerWidget {
   const WorkoutPlanListScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final authService = ref.watch(authServiceProvider);
+    final currentUser = authService.currentUser;
+
     // TODO: Replace with actual data from repository
     final mockPlans = [
       {'id': '1', 'name': 'Beginner Strength Training', 'weeks': 12},
@@ -31,6 +35,54 @@ class WorkoutPlanListScreen extends ConsumerWidget {
               // TODO: Trigger sync
             },
             tooltip: 'Sync',
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.account_circle),
+            tooltip: 'Account',
+            onSelected: (value) {
+              if (value == 'signout') {
+                _showSignOutDialog(context, ref);
+              }
+            },
+            itemBuilder: (context) => [
+              if (currentUser != null) ...[
+                PopupMenuItem<String>(
+                  enabled: false,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        currentUser.displayName ?? 'User',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        currentUser.email ?? '',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withOpacity(0.6),
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+              ],
+              const PopupMenuItem<String>(
+                value: 'signout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout),
+                    SizedBox(width: 12),
+                    Text('Sign Out'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -224,6 +276,47 @@ class WorkoutPlanListScreen extends ConsumerWidget {
                 backgroundColor: Colors.red,
               ),
               child: const Text('Delete & Reseed'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showSignOutDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Sign Out'),
+          content: const Text('Are you sure you want to sign out?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                // Close confirmation dialog first
+                Navigator.of(dialogContext).pop();
+
+                try {
+                  final authService = ref.read(authServiceProvider);
+                  // Sign out - navigation will be handled by auth state listener in router
+                  await authService.signOut();
+                  // No need to manually navigate - GoRouter will automatically redirect to login
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error signing out: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Sign Out'),
             ),
           ],
         );

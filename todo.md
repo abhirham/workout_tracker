@@ -1,465 +1,421 @@
-# Workout Tracking App - Todo List
+# Workout Tracking App - Implementation Roadmap
 
-## Phase 1: Project Setup & Architecture
+## 📊 CURRENT STATUS
 
-### 1.1 Project Initialization
+### ✅ COMPLETED (Production Ready)
 
-- [ ] Create Flutter project with `flutter create workout_tracker`
-- [ ] Set up Git repository and .gitignore
-- [ ] Configure project structure (lib/features, lib/core, lib/shared)
-- [ ] Set up environment configuration (.env for Firebase keys)
+#### Admin Dashboard (100% Complete)
+- ✅ Google OAuth authentication with admin-only access control
+- ✅ Protected routes (all pages require admin auth except /login)
+- ✅ Admin user management (add/remove admins, invite-only system)
+- ✅ Global workouts CRUD (create, read, update, delete with cascade handling)
+- ✅ Workout plans CRUD with nested management (Plan → Week → Day → Workout)
+- ✅ Fuzzy search autocomplete for workout selection
+- ✅ Per-workout configuration (baseWeights, targetReps, rest/workout timers)
+- ✅ Alternative workouts suggestions management
+- ✅ Bulk edit operations (target reps across weeks)
+- ✅ Copy weeks and days functionality
+- ✅ Real-time Firestore listeners for live updates
+- ✅ Toast notifications for user feedback
+- ✅ **JSON Import/Export** (backup/restore plans)
+- ✅ Firestore security rules with helper functions
+- ✅ Deployed and functional
 
-### 1.2 Firebase Setup
+#### Mobile App - Local Features (95% Complete)
+- ✅ Local database with Drift (SQLite) - Schema v8
+- ✅ Global workouts library (22 workouts: 21 weight, 1 timer)
+- ✅ Workout plan seeding with 8 weeks of progressive overload
+- ✅ Navigation flow (Plans → Weeks → Days → Single Exercise View)
+- ✅ Weight-based workouts:
+  - Weight/reps input with increment controls (+5 lbs, ±1 rep)
+  - Progressive overload (+5 lbs per week, phase-boundary aware)
+  - Rest timer (45 seconds, auto-start, tap to skip)
+  - Preset weights inherited from previous sets
+  - Full set tracking with save functionality
+- ✅ Timer-based workouts:
+  - Countdown timer with live display
+  - Start/Stop/Redo controls
+  - Auto-save when timer completes
+  - Actual duration tracking
+- ✅ Workout alternatives system:
+  - User-created alternatives (linked to globalWorkoutId)
+  - Cross-week/cross-day availability
+  - Separate progress tracking per alternative
+  - Modal UI for selection
+- ✅ Progress tracking with composite keys (planId + weekId + dayId + workoutId)
+- ✅ Material 3 UI with Google Fonts
+- ✅ Offline-first data storage
 
-- [ ] Create Firebase project in Firebase Console
-- [ ] Enable Firestore Database
-- [ ] Enable Firebase Authentication (for multi-user support)
-- [ ] Download and configure google-services.json (Android)
-- [ ] Download and configure GoogleService-Info.plist (iOS)
-- [ ] Add Firebase dependencies to pubspec.yaml
-- [ ] Initialize Firebase in main.dart
-
-### 1.3 Local Database & State Management
-
-- [ ] Choose local database (Drift recommended for Flutter + SQL)
-- [ ] Add drift, drift_flutter, riverpod dependencies
-- [ ] Set up database schema and tables
-- [ ] Create DAOs (Data Access Objects)
-- [ ] Set up Riverpod providers structure
-
-### 1.4 Project Dependencies
-
-- [ ] Add core dependencies: firebase_core, cloud_firestore, connectivity_plus
-- [ ] Add UI dependencies: google_fonts, flutter_animate, go_router
-- [ ] Add local storage: drift, shared_preferences
-- [ ] Add state management: flutter_riverpod
-- [ ] Add utilities: freezed, json_serializable, uuid
-
----
-
-## Phase 2: Data Models & Architecture
-
-### 2.1 Data Models (Shared Templates)
-
-- [ ] Create WorkoutPlan model (id, name, createdAt, updatedAt) - shared across all users
-- [ ] Create Week model (id, planId, weekNumber, name)
-- [ ] Create Day model (id, weekId, dayNumber, name)
-- [ ] Create Workout model (id, dayId, name, order, notes, defaultSets)
-- [ ] Create SetTemplate model (id, workoutId, setNumber, suggestedReps, suggestedWeight)
-- [ ] Create TimerConfig model (id, workoutId, duration, isActive)
-- [ ] Add Freezed annotations for immutability
-- [ ] Generate JSON serialization code
-
-### 2.1.1 Data Models (User Progress)
-
-- [ ] Create UserProfile model (userId, displayName, currentPlanId)
-- [ ] Create CompletedSet model (id, userId, workoutId, setNumber, weight, reps, completedAt)
-- [ ] Create WorkoutProgress model (userId, workoutId, lastCompletedAt, totalSets)
-- [ ] Add Freezed annotations for immutability
-- [ ] Generate JSON serialization code
-
-### 2.2 Local Database Schema
-
-**Shared Template Tables:**
-
-- [ ] Create workout_plans table (id, name, createdAt, updatedAt)
-- [ ] Create weeks table (id, planId, weekNumber, name)
-- [ ] Create days table (id, weekId, dayNumber, name)
-- [ ] Create workouts table (id, dayId, name, order, notes, defaultSets)
-- [ ] Create set_templates table (id, workoutId, setNumber, suggestedReps, suggestedWeight)
-- [ ] Create timer_configs table (id, workoutId, duration, isActive)
-
-**User Progress Tables:**
-
-- [ ] Create user_profile table (userId, displayName, currentPlanId)
-- [ ] Create completed_sets table (id, userId, workoutId, setNumber, weight, reps, completedAt)
-- [ ] Create workout_progress table (userId, workoutId, lastCompletedAt, totalSets)
-
-**Sync Management:**
-
-- [ ] Create sync_queue table (for pending changes)
-- [ ] Add indexes for performance
-- [ ] Set up foreign key relationships
-
-### 2.3 Firestore Collection Structure
-
-**Shared Template Collections (read-only for mobile users):**
-
-- [ ] Design /workout_plans collection (id, name, createdAt, updatedAt)
-- [ ] Design /workout_plans/{planId}/weeks subcollection
-- [ ] Design /workout_plans/{planId}/weeks/{weekId}/days subcollection
-- [ ] Design /workout_plans/{planId}/weeks/{weekId}/days/{dayId}/workouts subcollection
-- [ ] Design /workout_plans/{planId}/weeks/{weekId}/days/{dayId}/workouts/{workoutId}/set_templates subcollection
-- [ ] Design /timer_configs collection (global and per-workout)
-
-**User Progress Collections (per-user, read-write):**
-
-- [ ] Design /user_progress/{userId}/completed_sets collection
-- [ ] Design /user_progress/{userId}/workout_progress collection
-- [ ] Design /users/{userId} document (profile data)
-
-**Security & Performance:**
-
-- [ ] Create Firestore security rules (templates: read-all, progress: user-specific)
-- [ ] Create composite indexes for progress queries
-- [ ] Add indexes for filtering by userId and completedAt
-
-### 2.4 Repository Layer
-
-**Template Repositories (read-mostly):**
-
-- [ ] Create WorkoutPlanRepository (local + remote, sync from Firebase)
-- [ ] Create WeekRepository
-- [ ] Create DayRepository
-- [ ] Create WorkoutRepository
-- [ ] Create SetTemplateRepository
-- [ ] Create TimerConfigRepository
-
-**User Progress Repositories (read-write):**
-
-- [ ] Create UserProgressRepository (local + remote, user-specific)
-- [ ] Create CompletedSetRepository (offline-first writes)
-- [ ] Create WorkoutProgressRepository
-
-**Sync Management:**
-
-- [ ] Create SyncRepository (handles bidirectional sync)
-- [ ] Implement offline-first pattern (read local, write local, sync background)
-- [ ] Separate sync logic for templates vs user progress
-
-### 2.5 Sync Service
-
-- [ ] Create SyncService class
-- [ ] Implement connectivity listener
-- [ ] Implement template sync (download-only, from admin to users)
-- [ ] Implement user progress sync (bidirectional, user-specific data)
-- [ ] Handle conflict resolution for user progress (last-write-wins with timestamp)
-- [ ] Implement retry mechanism with exponential backoff
-- [ ] Create sync status provider
-- [ ] Add optimistic updates for UI
-- [ ] Implement user authentication and userId management
+#### Firebase Infrastructure (Built but Dormant)
+- ✅ Firebase project setup (Firestore, Auth, Security Rules)
+- ✅ Template sync service (code ready, not active)
+- ✅ Progress sync service (code ready, not active)
+- ✅ Sync queue processor (code ready, dormant)
+- ✅ Connectivity service (monitoring setup)
+- ✅ Firestore security rules (admin dashboard tested)
 
 ---
 
-## Phase 3: Mobile App - Core Features
+## 🎯 CURRENT PRIORITY: Firebase Auth + Activate Sync (Single-User MVP)
 
-### 3.1 Navigation & Routing
+### Phase 1: Authentication & Data Cleanup (Est: 2-3 hours)
 
-- [ ] Set up GoRouter for navigation
-- [ ] Create route structure (home → plan → week → day → workouts)
-- [ ] Implement deep linking support
-- [ ] Add navigation animations
+#### 1.1 Configure Firebase for Google Sign-In
+- [ ] Verify Firebase Console has Google Sign-In enabled
+- [ ] Download/update `google-services.json` (Android)
+- [ ] Download/update `GoogleService-Info.plist` (iOS)
+- [ ] Add OAuth client IDs for iOS/Android in Firebase Console
+- [ ] Update `pubspec.yaml` with `google_sign_in` package (if not present)
+- [ ] Verify Firebase project ID matches across all config files
 
-### 3.2 Home Screen - Workout Plans
+#### 1.2 Create Login Screen UI (NO Guest Mode)
+- [ ] Create `lib/features/auth/presentation/login_screen.dart`
+- [ ] Material 3 design with "Sign in with Google" button
+- [ ] Loading state during authentication
+- [ ] Error handling with user-friendly messages
+- [ ] **NO "Continue as Guest"** - authentication required
+- [ ] Show app logo/branding above sign-in button
 
-- [ ] Create WorkoutPlanListScreen
-- [ ] Display all workout plans
-- [ ] Add "Select Plan" functionality
-- [ ] Show current active plan
-- [ ] Add search/filter functionality
-- [ ] Display sync status indicator
+#### 1.3 Clear Local Testing Data
+- [ ] Add migration helper in `lib/core/database/database.dart`
+- [ ] Bump schema version (v8 → v9) to trigger clean slate
+- [ ] Clear these tables on migration:
+  - `completed_sets` (remove temp_user_id data)
+  - `workout_plans` (will sync from Firestore)
+  - `weeks`, `days`, `workouts`, `set_templates`
+  - `workout_alternatives` (user-created, start fresh)
+- [ ] Keep `global_workouts` table structure (will sync from Firestore)
+- [ ] Show loading screen: "Syncing your workout data from cloud..."
 
-### 3.3 Week Selection Screen
+#### 1.4 Update AuthService for Google Sign-In
+- [ ] Modify `lib/features/sync/services/auth_service.dart`
+- [ ] Replace anonymous auth with Google Sign-In flow
+- [ ] Store `userId` in `shared_preferences` after login
+- [ ] Provide `getUserId()` method for app-wide access
+- [ ] Handle sign-out and re-authentication
+- [ ] Error handling (no internet, user cancels, auth errors)
+- [ ] **Remove all anonymous auth code**
 
-- [ ] Create WeekSelectionScreen
-- [ ] Display all weeks for selected plan
-- [ ] Show week number and name
-- [ ] Add progress indicators (days completed)
-- [ ] Navigate to day selection
+#### 1.5 Create Auth State Provider
+- [ ] Create `lib/features/auth/providers/auth_provider.dart`
+- [ ] Riverpod provider to expose current user state
+- [ ] Stream changes from Firebase Auth
+- [ ] Provide logout method
+- [ ] Expose user profile data (name, email, photoURL)
+- [ ] Handle auth state: `null` → show login, `User` → show app
 
-### 3.4 Day Selection Screen
-
-- [ ] Create DaySelectionScreen
-- [ ] Display all days for selected week
-- [ ] Show completion status for each day
-- [ ] Navigate to workout list
-
-### 3.5 Workout List Screen
-
-- [ ] Create WorkoutListScreen
-- [ ] Display all workouts for selected day (from templates)
-- [ ] Show workout name and set count
-- [ ] Expandable sets view
-- [ ] Load user's previous progress for each set (if exists)
-- [ ] Weight and reps input fields (optimized for no lag)
-- [ ] Checkbox to mark set as complete
-- [ ] Auto-save on input change (debounced) to user_progress
-- [ ] Show suggested weight/reps from set templates
-
-### 3.6 Set Entry & Management
-
-- [ ] Create SetEntryWidget (weight + reps input)
-- [ ] Use TextEditingController with optimized rebuilds
-- [ ] Implement local-first saving (instant UI update)
-- [ ] Add validation (non-negative numbers)
-- [ ] Save to local user_progress DB immediately
-- [ ] Queue sync to Firebase user_progress collection
-- [ ] Show completion checkmark
-- [ ] Pre-fill with user's last completed weight/reps for this set
-- [ ] Fall back to template suggestions if no history
-
-### 3.7 Cooldown Timer
-
-- [ ] Create CooldownTimerWidget
-- [ ] Fetch timer duration from TimerConfig
-- [ ] Countdown timer with circular progress indicator
-- [ ] Sound/vibration on completion (optional)
-- [ ] Pause/resume functionality
-- [ ] Skip timer option
-- [ ] Auto-start after set completion
-- [ ] Background timer support (keeps running when app is minimized)
-
-### 3.8 Offline Support
-
-- [ ] Implement connectivity detection
-- [ ] Show offline indicator in UI
-- [ ] Queue all changes locally
-- [ ] Sync when connection restored
-- [ ] Show pending changes count
-- [ ] Handle sync conflicts gracefully
+#### 1.6 Update Router with Auth Guard
+- [ ] Modify `lib/core/router/app_router.dart`
+- [ ] Add login route (`/login`)
+- [ ] Add redirect logic: unauthenticated → `/login`
+- [ ] Authenticated users bypass login screen
+- [ ] Persist auth state across app restarts
+- [ ] Initial route checks auth state before deciding destination
 
 ---
 
-## Phase 4: Mobile App - UI/UX Polish
+### Phase 2: Replace temp_user_id Everywhere (Est: 1-2 hours)
 
-### 4.1 UI Components
+#### 2.1 Create UserService
+- [ ] Create `lib/core/services/user_service.dart`
+- [ ] Central service to get current user ID
+- [ ] Cache user ID from auth provider
+- [ ] Fallback to shared_preferences if provider unavailable
+- [ ] Method: `String getCurrentUserId()`
+- [ ] Throw error if no user ID available
 
-- [ ] Create reusable Card components
-- [ ] Create reusable Button components
-- [ ] Create Input field components (NumberInput)
-- [ ] Create Loading states (shimmer effects)
-- [ ] Create Empty states
-- [ ] Create Error states
+#### 2.2 Update All Screens (11+ locations)
+- [ ] `lib/features/workouts/presentation/workout_list_screen.dart` (7 TODOs)
+- [ ] `lib/features/weeks/presentation/week_selection_screen.dart`
+- [ ] `lib/features/days/presentation/day_selection_screen.dart`
+- [ ] `lib/features/workout_plans/presentation/workout_plan_list_screen.dart`
+- [ ] Any other files with `const userId = 'temp_user_id'`
+- [ ] Replace with `userService.getCurrentUserId()`
+- [ ] Test each screen after update
 
-### 4.2 Animations & Transitions
-
-- [ ] Add page transition animations
-- [ ] Add list item animations (staggered fade-in)
-- [ ] Add completion animations (checkmark, confetti)
-- [ ] Add progress indicators
-- [ ] Add pull-to-refresh
-
-### 4.3 Performance Optimization
-
-- [ ] Use const constructors everywhere
-- [ ] Implement ListView.builder for lists
-- [ ] Optimize rebuilds with Riverpod selectors
-- [ ] Add debouncing for input fields (300ms)
-- [ ] Lazy load data
-- [ ] Profile app performance
-
-### 4.4 User Experience
-
-- [ ] Add haptic feedback
-- [ ] Add success/error snackbars
-- [ ] Add confirmation dialogs (delete actions)
-- [ ] Implement dark mode
-- [ ] Add settings screen
-- [ ] Add onboarding/tutorial
+#### 2.3 Update Repository Methods
+- [ ] Pass `userId` from UI to repositories
+- [ ] Update database queries to filter by `userId`
+- [ ] Ensure all `CompletedSet` inserts include correct `userId`
+- [ ] Update `UserProfile` creation with real user data
 
 ---
 
-## Phase 5: Admin Web Dashboard
+### Phase 3: Activate Firebase Sync (Est: 2-3 hours)
 
-### 5.1 Dashboard Setup
+#### 3.1 Verify Sync Services Initialization
+- [ ] Check `lib/main.dart` - confirm `syncQueueProcessor.start()` called
+- [ ] Ensure it runs AFTER Firebase initialized and user authenticated
+- [ ] Add error handling for sync initialization failures
+- [ ] Only start sync AFTER user is authenticated
 
-- [ ] Choose framework (Flutter Web or React/Next.js)
-- [ ] Initialize project
-- [ ] Set up Firebase integration
-- [ ] Set up authentication
-- [ ] Create responsive layout
+#### 3.2 Enable Template Sync (Download from Firestore)
+- [ ] Activate `syncTemplatesFromFirestore()` in `template_sync_service.dart`
+- [ ] Download global workouts from Firestore (replace local seed)
+- [ ] Download workout plans from Firestore (admin-created plans)
+- [ ] Handle missing data gracefully (show empty state if no plans)
+- [ ] Add logging for sync progress
+- [ ] Show loading screen during initial sync on first login
 
-### 5.2 Authentication
+#### 3.3 Enable Progress Sync (Bidirectional)
+- [ ] Activate `uploadProgress()` in `progress_sync_service.dart`
+- [ ] Activate `downloadProgress()` on app startup (after auth)
+- [ ] Test bidirectional sync (local → Firestore → local)
+- [ ] Verify conflict resolution (last-write-wins)
+- [ ] Ensure user profile syncs (current plan/week)
+- [ ] Test batch uploads (20 sets at a time)
 
-- [ ] Create login screen
-- [ ] Implement Firebase Authentication
-- [ ] Add session management
-- [ ] Create protected routes
-- [ ] Add logout functionality
+#### 3.4 Add App Lifecycle Hooks
+- [ ] Modify `lib/main.dart` or create lifecycle observer
+- [ ] Flush sync queue when app goes to background (`AppLifecycleState.paused`)
+- [ ] Resume sync when app returns to foreground
+- [ ] Use `WidgetsBindingObserver` for lifecycle events
+- [ ] Handle app termination gracefully
 
-### 5.3 Workout Plan Management
-
-- [ ] Create workout plan list view (global templates)
-- [ ] Add create workout plan form
-- [ ] Add edit workout plan form
-- [ ] Add delete workout plan (with confirmation)
-- [ ] Add duplicate workout plan feature
-- [ ] Add search/filter
-- [ ] Note: Plans are global and visible to all users
-
-### 5.4 Week Management
-
-- [ ] Create week management interface (nested under plan)
-- [ ] Add create week form
-- [ ] Add edit week form
-- [ ] Add delete week
-- [ ] Add reorder weeks functionality
-- [ ] Add bulk week creation (e.g., create 12 weeks at once)
-
-### 5.5 Day Management
-
-- [ ] Create day management interface (nested under week)
-- [ ] Add create day form
-- [ ] Add edit day form
-- [ ] Add delete day
-- [ ] Add reorder days functionality
-- [ ] Add copy day from previous week
-
-### 5.6 Workout Exercise Management
-
-- [ ] Create workout exercise library (shared templates)
-- [ ] Add create exercise form (name, default sets, notes)
-- [ ] Add edit exercise
-- [ ] Add delete exercise
-- [ ] Assign exercises to specific days
-- [ ] Add exercise reordering within day
-- [ ] Add set template configuration (suggested reps, weight)
-- [ ] Note: Exercise templates are global, progress is per-user
-
-### 5.7 Timer Configuration
-
-- [ ] Create timer config screen
-- [ ] Add global default timer setting
-- [ ] Add per-workout timer override
-- [ ] Add enable/disable timer toggle
-- [ ] Add timer presets (30s, 60s, 90s, 120s)
-- [ ] Save to Firestore
-
-### 5.8 Additional Features
-
-- [ ] Add import/export functionality for workout plans (JSON/CSV)
-- [ ] Add workout plan templates library
-- [ ] Add analytics dashboard (per-user workout completion rates)
-- [ ] Add user management (list all users, view their progress)
-- [ ] Add activity log (view recent completions across all users)
-- [ ] Add user progress viewer (see individual user's completed sets)
+#### 3.5 Test Offline → Online Transition
+- [ ] Enable airplane mode
+- [ ] Complete a workout (save sets locally)
+- [ ] Disable airplane mode
+- [ ] Verify sync queue uploads to Firestore
+- [ ] Check admin dashboard shows new completed sets
 
 ---
 
-## Phase 6: Testing & Quality Assurance
+### Phase 4: Sync Status UI (Est: 1-2 hours)
 
-### 6.1 Unit Tests
+#### 4.1 Create Sync Status Provider
+- [ ] Create `lib/features/sync/providers/sync_status_provider.dart`
+- [ ] Track sync state: `idle`, `syncing`, `success`, `error`
+- [ ] Expose last sync timestamp
+- [ ] Expose pending items count
+- [ ] Listen to sync queue changes
 
-- [ ] Test data models (serialization/deserialization)
-- [ ] Test repository methods
-- [ ] Test sync service logic
-- [ ] Test timer logic
-- [ ] Test validation logic
-- [ ] Achieve >80% code coverage
+#### 4.2 Add Sync Indicator to Home Screen
+- [ ] Update home/plan list screen
+- [ ] Add cloud icon badge showing sync status
+- [ ] Show "Synced" / "Syncing..." / "X pending" message
+- [ ] Optional: Tap to open sync details modal
 
-### 6.2 Integration Tests
+#### 4.3 Add Manual Sync Button
+- [ ] "Sync Now" button on home screen or app bar
+- [ ] Show loading spinner during sync
+- [ ] Success toast: "Synced X sets"
+- [ ] Error toast with retry option
+- [ ] Disable during active sync
 
-- [ ] Test offline mode (airplane mode simulation)
-- [ ] Test sync after reconnection (templates and user progress)
-- [ ] Test conflict resolution for user progress
-- [ ] Test data persistence (templates vs user data)
-- [ ] Test navigation flow
-- [ ] Test multi-user scenario (two users, same plan, separate progress)
-
-### 6.3 Manual Testing
-
-- [ ] Test on Android device
-- [ ] Test on iOS device
-- [ ] Test offline → online transition
-- [ ] Test data entry performance (should be instant)
-- [ ] Test timer functionality
-- [ ] Test admin dashboard on desktop browser
-
-### 6.4 Performance Testing
-
-- [ ] Measure app startup time
-- [ ] Measure input lag (should be <16ms)
-- [ ] Measure sync performance with large datasets
-- [ ] Test with 100+ workouts
-- [ ] Profile memory usage
+#### 4.4 Improve Error Handling
+- [ ] Catch sync errors and display to user
+- [ ] Add retry button for failed sync items
+- [ ] Show specific error messages (no internet, auth expired, etc.)
+- [ ] Log errors to console for debugging
 
 ---
 
-## Phase 7: Deployment & Documentation
+### Phase 5: Polish Local Features (Est: 2-3 hours)
 
-### 7.1 Mobile App Build
+#### 5.1 Test Core Workout Flow
+- [ ] **Weight workouts**: Verify increment controls, save, rest timer
+- [ ] **Timer workouts**: Verify countdown, stop, redo
+- [ ] **Progressive overload**: Test +5 lbs per week across phase boundaries
+- [ ] **Alternatives**: Test create, select, separate tracking
+- [ ] Verify all features work with real user IDs
 
-- [ ] Configure Android app signing
-- [ ] Build Android APK (`flutter build apk`)
-- [ ] Build Android App Bundle (optional, for Play Store)
-- [ ] Configure iOS provisioning profiles
-- [ ] Build iOS IPA (`flutter build ipa`)
-- [ ] Test sideloading on physical devices
+#### 5.2 Fix Any UI Bugs
+- [ ] Check spacing, alignment, colors
+- [ ] Verify Material 3 theming consistency
+- [ ] Test on different screen sizes (Android/iOS)
+- [ ] Ensure loading states are clear
 
-### 7.2 Admin Dashboard Deployment
+#### 5.3 Improve User Feedback
+- [ ] Add loading indicators where missing
+- [ ] Improve toast messages (clear, actionable)
+- [ ] Add confirmation dialogs for destructive actions
+- [ ] Ensure all buttons have proper disabled states
 
-- [ ] Build web app for production
-- [ ] Deploy to Firebase Hosting (or Vercel/Netlify)
-- [ ] Configure custom domain (optional)
-- [ ] Set up SSL certificate
-- [ ] Test deployed dashboard
-
-### 7.3 Firebase Configuration
-
-- [ ] Finalize Firestore security rules (templates: read-all, user_progress: user-specific)
-- [ ] Set up Firestore indexes (especially for user_progress queries)
-- [ ] Configure Firebase quotas and limits
-- [ ] Set up backup strategy
-- [ ] Monitor Firebase usage
-- [ ] Ensure users can only read/write their own progress data
-
-### 7.4 Documentation
-
-- [ ] Write README.md with project overview
-- [ ] Document sideloading instructions for Android
-- [ ] Document sideloading instructions for iOS (TestFlight or direct install)
-- [ ] Document admin dashboard usage
-- [ ] Create user guide for mobile app
-- [ ] Document Firebase setup steps
-- [ ] Add architecture diagram
-
-### 7.5 Maintenance & Updates
-
-- [ ] Set up version control strategy
-- [ ] Set up error tracking (Sentry/Crashlytics)
-- [ ] Monitor app performance
-- [ ] Create update/release process
+#### 5.4 Performance Optimization
+- [ ] Profile database queries (should be <16ms)
+- [ ] Add database indexes if needed
+- [ ] Optimize Riverpod rebuilds with selectors
+- [ ] Test with large datasets (100+ completed sets)
 
 ---
 
-## Future Enhancements (Optional)
+### Phase 6: Testing & Validation (Est: 2-3 hours)
 
+#### 6.1 End-to-End Testing
+- [ ] **Scenario 1**: New user sign-in → download plans → complete workout → verify sync
+- [ ] **Scenario 2**: Offline workout → go online → verify sync
+- [ ] **Scenario 3**: Sign out → sign in → verify progress persists
+- [ ] **Scenario 4**: Admin dashboard → view user's completed sets
+
+#### 6.2 Edge Case Testing
+- [ ] No internet connection (graceful degradation)
+- [ ] Firebase auth expires (re-prompt login)
+- [ ] Sync queue overflow (batch properly)
+- [ ] Corrupted local database (reset with warning)
+- [ ] Empty plans from Firestore (show helpful empty states)
+- [ ] First-time user with no workout plans
+
+#### 6.3 Security Validation
+- [ ] Verify Firestore security rules block unauthorized access
+- [ ] Test with multiple test accounts (ensure data isolation)
+- [ ] Confirm user can only see their own progress
+- [ ] Verify admin dashboard respects security rules
+- [ ] Test with real user IDs (not temp IDs)
+
+#### 6.4 Performance Validation
+- [ ] Measure set save time (should be instant, <16ms)
+- [ ] Measure sync upload time (acceptable < 2s for batch)
+- [ ] Check memory usage during long workouts
+- [ ] Verify no memory leaks
+- [ ] Test with 100+ completed sets
+
+---
+
+## 🎯 SUCCESS CRITERIA
+
+### Authentication
+- ✅ User can sign in with Google (no guest mode)
+- ✅ User ID persists across app restarts
+- ✅ Logout works and clears data
+- ✅ No anonymous auth code remains
+
+### Data Cleanup
+- ✅ No temp_user_id data remains
+- ✅ Local database cleared on migration
+- ✅ Fresh start with Firestore data
+
+### Sync Active
+- ✅ Templates download from Firestore on first launch
+- ✅ Completed sets upload to Firestore within 60s
+- ✅ Offline → online sync works seamlessly
+
+### Data Isolation
+- ✅ User only sees their own progress
+- ✅ Firestore security rules enforced
+- ✅ Admin dashboard can view all users
+
+### User Experience
+- ✅ Sync status visible on home screen
+- ✅ Manual sync button works
+- ✅ Error messages are clear and actionable
+
+### Production Ready
+- ✅ No hardcoded user IDs remaining
+- ✅ All TODOs resolved
+- ✅ End-to-end flow tested
+- ✅ Performance acceptable (<16ms saves)
+
+---
+
+## 📁 FILES TO MODIFY
+
+### New Files
+- `lib/features/auth/presentation/login_screen.dart`
+- `lib/features/auth/providers/auth_provider.dart`
+- `lib/core/services/user_service.dart`
+- `lib/features/sync/providers/sync_status_provider.dart`
+
+### Modified Files
+- `lib/core/database/database.dart` (add data cleanup migration v8→v9)
+- `lib/features/sync/services/auth_service.dart` (Google Sign-In, remove anonymous)
+- `lib/core/router/app_router.dart` (auth guard, login route)
+- `lib/main.dart` (lifecycle hooks, sync after auth)
+- `lib/features/workouts/presentation/workout_list_screen.dart` (remove temp_user_id)
+- `lib/features/weeks/presentation/week_selection_screen.dart` (remove temp_user_id)
+- `lib/features/days/presentation/day_selection_screen.dart` (remove temp_user_id)
+- `lib/features/workout_plans/presentation/workout_plan_list_screen.dart` (remove temp_user_id)
+- `lib/features/sync/services/template_sync_service.dart` (activate)
+- `lib/features/sync/services/progress_sync_service.dart` (activate)
+- All repository files that use userId
+
+### Config Files
+- `android/app/google-services.json` (update if needed)
+- `ios/Runner/GoogleService-Info.plist` (update if needed)
+- `pubspec.yaml` (ensure google_sign_in dependency)
+
+---
+
+## ⏱️ ESTIMATED TIMELINE
+
+- **Phase 1** (Auth Setup + Data Cleanup): 2-3 hours
+- **Phase 2** (Replace temp IDs): 1-2 hours
+- **Phase 3** (Activate Sync): 2-3 hours
+- **Phase 4** (Sync UI): 1-2 hours
+- **Phase 5** (Polish): 2-3 hours
+- **Phase 6** (Testing): 2-3 hours
+
+**Total**: ~10-16 hours (1-2 full work days)
+
+---
+
+## 🚀 FUTURE ENHANCEMENTS (Post-MVP)
+
+### User Features
 - [ ] Add exercise video/image attachments
 - [ ] Add rest day tracking
 - [ ] Add workout history and statistics
 - [ ] Add progress charts (weight progression over time)
 - [ ] Add workout notes and comments
 - [ ] Add personal records (PRs) tracking
+- [ ] Add body weight tracking
+- [ ] Add workout streaks and achievements
+
+### Admin Dashboard
+- [ ] CSV export/import for workout plans
+- [ ] Analytics dashboard (completion rates, popular exercises)
+- [ ] Activity log (recent user completions)
+- [ ] User progress viewer (individual user stats)
+- [ ] Workout plan templates library
+- [ ] Bulk operations (batch edit multiple plans)
+
+### Technical Improvements
+- [ ] Full multi-user support (multiple users per device)
+- [ ] Push notifications for rest timer
+- [ ] Apple Watch companion app
+- [ ] Wear OS support
+- [ ] Dark mode
+- [ ] Settings screen (timer preferences, units)
+- [ ] Onboarding tutorial
+- [ ] Error tracking (Sentry/Crashlytics)
+- [ ] Performance monitoring
+- [ ] Automated testing (unit + integration)
 
 ---
 
-## Technical Stack Summary
+## 📚 TECHNICAL STACK
 
 **Mobile App:**
-
-- Flutter (Dart)
+- Flutter 3.x (Dart)
 - Riverpod (State Management)
 - Drift (Local SQLite Database)
 - Firebase (Firestore, Auth)
 - GoRouter (Navigation)
 - Freezed (Data Classes)
+- Google Fonts (Typography)
 
 **Admin Dashboard:**
-
-- Flutter Web OR React/Next.js
+- React/Next.js
 - Firebase (Firestore, Auth, Hosting)
-- Tailwind CSS (if React)
+- Tailwind CSS
 
 **Backend:**
-
 - Firebase Firestore (NoSQL Database)
-  - Shared workout templates (plans, weeks, days, workouts, set_templates)
-  - User-specific progress data (completed_sets, workout_progress)
-- Firebase Authentication (multi-user support)
-- Firebase Hosting (Web Dashboard)
+- Firebase Authentication (Google Sign-In)
+- Firebase Hosting (Admin Dashboard)
 
 **DevOps:**
-
 - Git for version control
 - Firebase CLI for deployment
 - Android Studio / Xcode for builds
+
+---
+
+## 📝 NOTES
+
+- **Single-User MVP**: One user per app instance (device-based)
+- **No Guest Mode**: Authentication required to use app
+- **Data Cleanup**: Migration v8→v9 clears all testing data
+- **Sync Strategy**: Offline-first with background sync
+- **Admin Ready**: Dashboard already supports multiple users
+- **Extensible**: Easy to add full multi-user support later

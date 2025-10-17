@@ -5,8 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:workout_tracker/core/router/app_router.dart';
 import 'package:workout_tracker/core/database/database_provider.dart';
 import 'package:workout_tracker/firebase_options.dart';
-import 'package:workout_tracker/features/sync/services/auth_service.dart';
-import 'package:workout_tracker/features/sync/services/sync_queue_processor.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,36 +14,16 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Create provider container to access seeder
+  // Create provider container
   final container = ProviderContainer();
 
   // Seed database with initial data if needed
+  // Note: Auth will trigger sync after user logs in
   try {
     final seeder = container.read(databaseSeederProvider);
     await seeder.seedIfNeeded();
   } catch (e, stackTrace) {
     debugPrint('Error seeding database: $e');
-    debugPrint('Stack trace: $stackTrace');
-  }
-
-  // Initialize authentication and sync services
-  try {
-    // Ensure user is authenticated (anonymous auth)
-    final authService = container.read(authServiceProvider);
-    await authService.ensureAuthenticated();
-    debugPrint('User authenticated: ${authService.currentUserId}');
-
-    // Initialize sync queue processor
-    final syncProcessor = container.read(syncQueueProcessorProvider);
-    syncProcessor.start();
-
-    // Trigger initial full sync in background (non-blocking)
-    syncProcessor.fullSync().catchError((e, stackTrace) {
-      debugPrint('Error in initial sync: $e');
-      debugPrint('Stack trace: $stackTrace');
-    });
-  } catch (e, stackTrace) {
-    debugPrint('Error initializing sync services: $e');
     debugPrint('Stack trace: $stackTrace');
   }
 
@@ -57,15 +35,17 @@ void main() async {
   );
 }
 
-class WorkoutTrackerApp extends StatelessWidget {
+class WorkoutTrackerApp extends ConsumerWidget {
   const WorkoutTrackerApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(appRouterProvider);
+
     return MaterialApp.router(
       title: 'Workout Tracker',
       debugShowCheckedModeBanner: false,
-      routerConfig: appRouter,
+      routerConfig: router,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blue,
