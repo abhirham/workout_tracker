@@ -188,7 +188,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration {
@@ -373,6 +373,25 @@ class AppDatabase extends _$AppDatabase {
           await m.createTable(syncQueue);
 
           // Note: global_workouts data will be re-seeded or synced from Firestore
+        }
+        if (from < 10) {
+          // One-time migration: Clear ALL local data to sync with Firestore
+          // This is a fresh start - all data will come from Firestore after this
+          await customStatement('DELETE FROM completed_sets');
+          await customStatement('DELETE FROM workout_progress');
+          await customStatement('DELETE FROM workout_alternatives');
+          await customStatement('DELETE FROM set_templates');
+          await customStatement('DELETE FROM timer_configs');
+          await customStatement('DELETE FROM workouts');
+          await customStatement('DELETE FROM days');
+          await customStatement('DELETE FROM weeks');
+          await customStatement('DELETE FROM workout_plans');
+          await customStatement('DELETE FROM global_workouts');
+          await customStatement('DELETE FROM user_profiles');
+          await customStatement('DELETE FROM sync_queue');
+
+          // Database structure remains intact, but all data is cleared
+          // Initial sync from Firestore will populate everything
         }
       },
     );

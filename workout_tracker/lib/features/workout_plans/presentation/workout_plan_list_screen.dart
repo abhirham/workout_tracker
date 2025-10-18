@@ -297,15 +297,17 @@ class WorkoutPlanListScreen extends ConsumerWidget {
             ),
             FilledButton(
               onPressed: () async {
-                // Close confirmation dialog first
-                Navigator.of(dialogContext).pop();
-
                 try {
                   final authService = ref.read(authServiceProvider);
-                  // Sign out - navigation will be handled by auth state listener in router
+                  // Sign out - this will trigger auth state change
+                  // GoRouter will automatically handle navigation to login
+                  // and automatically close this dialog
                   await authService.signOut();
-                  // No need to manually navigate - GoRouter will automatically redirect to login
                 } catch (e) {
+                  // Only close dialog and show error if sign out failed
+                  if (dialogContext.mounted) {
+                    Navigator.of(dialogContext).pop();
+                  }
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(

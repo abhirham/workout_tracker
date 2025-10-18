@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workout_tracker/features/auth/presentation/login_screen.dart';
+import 'package:workout_tracker/features/sync/presentation/sync_loading_screen.dart';
 import 'package:workout_tracker/features/sync/services/auth_service.dart';
 import 'package:workout_tracker/features/workout_plans/presentation/workout_plan_list_screen.dart';
 import 'package:workout_tracker/features/weeks/presentation/week_selection_screen.dart';
@@ -34,19 +36,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/login',
     refreshListenable: GoRouterRefreshStream(authService.authStateChanges),
-    redirect: (context, state) {
+    redirect: (context, state) async {
       final user = authService.currentUser;
       final isAuth = user != null;
       final isLoggingIn = state.matchedLocation == '/login';
+      final isSyncing = state.matchedLocation == '/sync';
 
       // If not authenticated and not on login page, redirect to login
       if (!isAuth && !isLoggingIn) {
         return '/login';
       }
 
-      // If authenticated and on login page, redirect to home
-      if (isAuth && isLoggingIn) {
-        return '/';
+      // If authenticated, check if initial sync is needed
+      if (isAuth && !isSyncing) {
+        final prefs = await SharedPreferences.getInstance();
+        final hasCompletedSync = prefs.getBool('hasCompletedInitialSync') ?? false;
+
+        // If sync not completed and not already on sync page, redirect to sync
+        if (!hasCompletedSync && !isSyncing) {
+          return '/sync';
+        }
+
+        // If on login page and sync completed, redirect to home
+        if (isLoggingIn && hasCompletedSync) {
+          return '/';
+        }
       }
 
       // No redirect needed
@@ -57,6 +71,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/login',
         name: 'login',
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/sync',
+        name: 'sync',
+        builder: (context, state) => const SyncLoadingScreen(),
       ),
       GoRoute(
         path: '/',

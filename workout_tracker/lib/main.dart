@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:workout_tracker/core/router/app_router.dart';
-import 'package:workout_tracker/core/database/database_provider.dart';
 import 'package:workout_tracker/firebase_options.dart';
 
 void main() async {
@@ -17,15 +16,8 @@ void main() async {
   // Create provider container
   final container = ProviderContainer();
 
-  // Seed database with initial data if needed
-  // Note: Auth will trigger sync after user logs in
-  try {
-    final seeder = container.read(databaseSeederProvider);
-    await seeder.seedIfNeeded();
-  } catch (e, stackTrace) {
-    debugPrint('Error seeding database: $e');
-    debugPrint('Stack trace: $stackTrace');
-  }
+  // Note: Local seeding removed - all data will be synced from Firestore
+  // after user logs in for the first time
 
   runApp(
     UncontrolledProviderScope(

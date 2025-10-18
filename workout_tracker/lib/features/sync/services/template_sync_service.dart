@@ -25,40 +25,50 @@ class TemplateSyncService {
           .where('isActive', isEqualTo: true)
           .get();
 
-      debugPrint('[TemplateSyncService] Found ${snapshot.docs.length} global workouts');
+      debugPrint(
+        '[TemplateSyncService] Found ${snapshot.docs.length} global workouts',
+      );
 
       for (final doc in snapshot.docs) {
         final data = doc.data();
 
         // Parse muscle groups, equipment, and keywords from Firestore arrays
-        final muscleGroups = (data['muscleGroups'] as List<dynamic>?)
-            ?.map((e) => e.toString())
-            .toList() ?? [];
-        final equipment = (data['equipment'] as List<dynamic>?)
-            ?.map((e) => e.toString())
-            .toList() ?? [];
-        final searchKeywords = (data['searchKeywords'] as List<dynamic>?)
-            ?.map((e) => e.toString())
-            .toList() ?? [];
+        final muscleGroups =
+            (data['muscleGroups'] as List<dynamic>?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            [];
+        final equipment =
+            (data['equipment'] as List<dynamic>?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            [];
+        final searchKeywords =
+            (data['searchKeywords'] as List<dynamic>?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            [];
 
         // Convert to CSV for local storage
         final muscleGroupsCsv = muscleGroups.join(',');
         final equipmentCsv = equipment.join(',');
         final searchKeywordsCsv = searchKeywords.join(',');
 
-        await _database.into(_database.globalWorkouts).insertOnConflictUpdate(
-          GlobalWorkoutsCompanion.insert(
-            id: doc.id,
-            name: data['name'] as String,
-            type: data['type'] as String,
-            muscleGroups: muscleGroupsCsv,
-            equipment: equipmentCsv,
-            searchKeywords: searchKeywordsCsv,
-            isActive: Value(data['isActive'] as bool? ?? true),
-            createdAt: (data['createdAt'] as Timestamp).toDate(),
-            updatedAt: (data['updatedAt'] as Timestamp).toDate(),
-          ),
-        );
+        await _database
+            .into(_database.globalWorkouts)
+            .insertOnConflictUpdate(
+              GlobalWorkoutsCompanion.insert(
+                id: doc.id,
+                name: data['name'] as String,
+                type: data['type'] as String,
+                muscleGroups: muscleGroupsCsv,
+                equipment: equipmentCsv,
+                searchKeywords: searchKeywordsCsv,
+                isActive: Value(data['isActive'] as bool? ?? true),
+                createdAt: (data['createdAt'] as Timestamp).toDate(),
+                updatedAt: (data['updatedAt'] as Timestamp).toDate(),
+              ),
+            );
       }
 
       debugPrint('[TemplateSyncService] Global workouts sync complete');
@@ -75,20 +85,25 @@ class TemplateSyncService {
       debugPrint('[TemplateSyncService] Syncing workout plan: $planId');
 
       // 1. Sync workout plan
-      final planDoc = await _firestore.collection('workout_plans').doc(planId).get();
+      final planDoc = await _firestore
+          .collection('workout_plans')
+          .doc(planId)
+          .get();
       if (!planDoc.exists) {
         throw Exception('Workout plan not found: $planId');
       }
 
       final planData = planDoc.data()!;
-      await _database.into(_database.workoutPlans).insertOnConflictUpdate(
-        WorkoutPlansCompanion.insert(
-          id: planId,
-          name: planData['name'] as String,
-          createdAt: (planData['createdAt'] as Timestamp).toDate(),
-          updatedAt: (planData['updatedAt'] as Timestamp).toDate(),
-        ),
-      );
+      await _database
+          .into(_database.workoutPlans)
+          .insertOnConflictUpdate(
+            WorkoutPlansCompanion.insert(
+              id: planId,
+              name: planData['name'] as String,
+              createdAt: (planData['createdAt'] as Timestamp).toDate(),
+              updatedAt: (planData['updatedAt'] as Timestamp).toDate(),
+            ),
+          );
 
       // 2. Sync weeks
       final weeksSnapshot = await _firestore
@@ -99,14 +114,16 @@ class TemplateSyncService {
 
       for (final weekDoc in weeksSnapshot.docs) {
         final weekData = weekDoc.data();
-        await _database.into(_database.weeks).insertOnConflictUpdate(
-          WeeksCompanion.insert(
-            id: weekDoc.id,
-            planId: planId,
-            weekNumber: weekData['weekNumber'] as int,
-            name: weekData['name'] as String,
-          ),
-        );
+        await _database
+            .into(_database.weeks)
+            .insertOnConflictUpdate(
+              WeeksCompanion.insert(
+                id: weekDoc.id,
+                planId: planId,
+                weekNumber: weekData['weekNumber'] as int,
+                name: weekData['name'] as String,
+              ),
+            );
 
         // 3. Sync days for this week
         final daysSnapshot = await _firestore
@@ -119,14 +136,16 @@ class TemplateSyncService {
 
         for (final dayDoc in daysSnapshot.docs) {
           final dayData = dayDoc.data();
-          await _database.into(_database.days).insertOnConflictUpdate(
-            DaysCompanion.insert(
-              id: dayDoc.id,
-              weekId: weekDoc.id,
-              dayNumber: dayData['dayNumber'] as int,
-              name: dayData['name'] as String,
-            ),
-          );
+          await _database
+              .into(_database.days)
+              .insertOnConflictUpdate(
+                DaysCompanion.insert(
+                  id: dayDoc.id,
+                  weekId: weekDoc.id,
+                  dayNumber: int.parse(dayData['dayNumber']),
+                  name: dayData['name'] as String,
+                ),
+              );
 
           // 4. Sync workouts for this day
           final workoutsSnapshot = await _firestore
@@ -146,32 +165,40 @@ class TemplateSyncService {
             final baseWeights = (workoutData['baseWeights'] as List<dynamic>?)
                 ?.map((e) => (e as num).toDouble())
                 .toList();
-            final alternativeWorkouts = (workoutData['alternativeWorkouts'] as List<dynamic>?)
-                ?.map((e) => e.toString())
-                .toList();
+            final alternativeWorkouts =
+                (workoutData['alternativeWorkouts'] as List<dynamic>?)
+                    ?.map((e) => e.toString())
+                    .toList();
 
             // Convert to CSV for local storage
-            final baseWeightsCsv = baseWeights?.map((w) => w.toString()).join(',');
+            final baseWeightsCsv = baseWeights
+                ?.map((w) => w.toString())
+                .join(',');
             final alternativeWorkoutsCsv = alternativeWorkouts?.join(',');
-
-            await _database.into(_database.workouts).insertOnConflictUpdate(
-              WorkoutsCompanion.insert(
-                id: workoutDoc.id,
-                planId: planId,
-                globalWorkoutId: workoutData['globalWorkoutId'] as String,
-                dayId: dayDoc.id,
-                name: workoutData['name'] as String,
-                order: workoutData['order'] as int,
-                notes: Value(workoutData['notes'] as String?),
-                baseWeights: Value(baseWeightsCsv),
-                targetReps: Value(workoutData['targetReps'] as int?),
-                restTimerSeconds: Value(workoutData['restTimerSeconds'] as int?),
-                workoutDurationSeconds: Value(workoutData['workoutDurationSeconds'] as int?),
-                alternativeWorkouts: Value(alternativeWorkoutsCsv),
-                createdAt: (workoutData['createdAt'] as Timestamp).toDate(),
-                updatedAt: (workoutData['updatedAt'] as Timestamp).toDate(),
-              ),
-            );
+            await _database
+                .into(_database.workouts)
+                .insertOnConflictUpdate(
+                  WorkoutsCompanion.insert(
+                    id: workoutDoc.id,
+                    planId: planId,
+                    globalWorkoutId: workoutData['globalWorkoutId'] as String,
+                    dayId: dayDoc.id,
+                    name: workoutData['name'] as String,
+                    order: workoutData['order'] as int,
+                    notes: Value(workoutData['notes'] as String?),
+                    baseWeights: Value(baseWeightsCsv),
+                    targetReps: Value(workoutData['targetReps'] as int?),
+                    restTimerSeconds: Value(
+                      workoutData['restTimerSeconds'] as int?,
+                    ),
+                    workoutDurationSeconds: Value(
+                      workoutData['workoutDurationSeconds'] as int?,
+                    ),
+                    alternativeWorkouts: Value(alternativeWorkoutsCsv),
+                    createdAt: (workoutData['createdAt'] as Timestamp).toDate(),
+                    updatedAt: (workoutData['updatedAt'] as Timestamp).toDate(),
+                  ),
+                );
 
             // 5. Sync set templates (optional - for now, we generate them from baseWeights)
             // SetTemplates can be derived from baseWeights array, so we may skip syncing them
