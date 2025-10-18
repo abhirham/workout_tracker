@@ -96,6 +96,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
         'globalWorkoutId': workoutWithSets.workout.globalWorkoutId,
         'type': globalWorkout?.type ?? WorkoutType.weight,  // Default to weight if not found
         'notes': workoutWithSets.workout.notes,
+        'targetReps': workoutWithSets.workout.targetReps,  // Target reps string from admin (e.g., "12", "8-10", "AMRAP")
         'timerSeconds': workoutWithSets.timerConfig?.durationSeconds ?? 45,
         'sets': workoutWithSets.sets.map((setTemplate) {
           return {
@@ -781,13 +782,9 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
       text: initialWeight?.toString() ?? '',
     );
 
-    // Reps are always the suggested reps (set by admin, constant for the week)
-    final targetReps = set['suggestedReps'];
-    final actualReps = set['actualReps'] ?? targetReps;
-    // Set the actual reps in the map if not already set
-    if (set['actualReps'] == null && actualReps != null) {
-      set['actualReps'] = actualReps;
-    }
+    // Get target reps from workout (set by admin, e.g., "12", "8-10", "AMRAP")
+    final targetReps = workout['targetReps'] as String?;
+    final actualReps = set['actualReps'];
 
     final repsController = TextEditingController(
       text: actualReps?.toString() ?? '',
@@ -1017,7 +1014,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Reps (Target: ${targetReps ?? '?'})',
+                        targetReps != null ? 'Reps (Target: $targetReps)' : 'Reps',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: Theme.of(context)
                                   .colorScheme
@@ -1041,7 +1038,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          hintText: targetReps?.toString(),
+                          hintText: targetReps,
                           suffixIcon: isEnabled
                               ? Row(
                                   mainAxisSize: MainAxisSize.min,

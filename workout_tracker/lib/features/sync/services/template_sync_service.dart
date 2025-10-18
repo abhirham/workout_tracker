@@ -161,6 +161,23 @@ class TemplateSyncService {
           for (final workoutDoc in workoutsSnapshot.docs) {
             final workoutData = workoutDoc.data();
 
+            // Fetch global workout data to get the name
+            final globalWorkoutId = workoutData['globalWorkoutId'] as String;
+            final globalWorkoutDoc = await _firestore
+                .collection('global_workouts')
+                .doc(globalWorkoutId)
+                .get();
+
+            if (!globalWorkoutDoc.exists) {
+              debugPrint(
+                '[TemplateSyncService] Warning: Global workout not found: $globalWorkoutId. Skipping workout ${workoutDoc.id}',
+              );
+              continue;
+            }
+
+            final globalWorkoutData = globalWorkoutDoc.data()!;
+            final workoutName = globalWorkoutData['name'] as String;
+
             // Parse baseWeights and alternativeWorkouts from Firestore arrays
             final baseWeights = (workoutData['baseWeights'] as List<dynamic>?)
                 ?.map((e) => (e as num).toDouble())
@@ -181,13 +198,13 @@ class TemplateSyncService {
                   WorkoutsCompanion.insert(
                     id: workoutDoc.id,
                     planId: planId,
-                    globalWorkoutId: workoutData['globalWorkoutId'] as String,
+                    globalWorkoutId: globalWorkoutId,
                     dayId: dayDoc.id,
-                    name: workoutData['name'] as String,
+                    name: workoutName,
                     order: workoutData['order'] as int,
                     notes: Value(workoutData['notes'] as String?),
                     baseWeights: Value(baseWeightsCsv),
-                    targetReps: Value(workoutData['targetReps'] as int?),
+                    targetReps: Value(workoutData['targetReps'] as String?),
                     restTimerSeconds: Value(
                       workoutData['restTimerSeconds'] as int?,
                     ),

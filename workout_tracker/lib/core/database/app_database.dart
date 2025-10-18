@@ -63,7 +63,7 @@ class Workouts extends Table {
   IntColumn get order => integer()();
   TextColumn get notes => text().nullable()();
   TextColumn get baseWeights => text().nullable()();  // JSON array for progressive overload base (null for timer workouts)
-  IntColumn get targetReps => integer().nullable()();  // Target reps set by admin per workout (null for timer workouts)
+  TextColumn get targetReps => text().nullable()();  // Target reps set by admin per workout (e.g., "12", "8-10", "AMRAP") (null for timer workouts)
   IntColumn get restTimerSeconds => integer().nullable()();  // Rest between sets for weight workouts (null for timer)
   IntColumn get workoutDurationSeconds => integer().nullable()();  // Duration for timer workouts (null for weight)
   TextColumn get alternativeWorkouts => text().nullable()();  // JSON array of alternative globalWorkoutIds
@@ -188,7 +188,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration {
@@ -392,6 +392,18 @@ class AppDatabase extends _$AppDatabase {
 
           // Database structure remains intact, but all data is cleared
           // Initial sync from Firestore will populate everything
+        }
+        if (from < 11) {
+          // Schema change: targetReps column type changed from INTEGER to TEXT
+          // This allows flexible rep ranges like "12", "8-10", "AMRAP", etc.
+          // Clear all template data to allow re-sync from Firestore with new schema
+          await customStatement('DELETE FROM set_templates');
+          await customStatement('DELETE FROM timer_configs');
+          await customStatement('DELETE FROM workouts');
+          await customStatement('DELETE FROM days');
+          await customStatement('DELETE FROM weeks');
+          await customStatement('DELETE FROM workout_plans');
+          await customStatement('DELETE FROM global_workouts');
         }
       },
     );

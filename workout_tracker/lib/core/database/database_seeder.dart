@@ -123,13 +123,14 @@ class DatabaseSeeder {
           // Note: Set templates are still unique per day/week combo since they have week-specific weights
           for (int setNum = 0; setNum < baseWeights.length; setNum++) {
             final calculatedWeight = _calculateWeight(baseWeights[setNum], weekNum);
+            final targetRepsInt = int.parse(targetReps);  // Parse string to int for SetTemplates
 
             await _database.into(_database.setTemplates).insert(
               SetTemplatesCompanion.insert(
                 id: '${dayId}_${workoutId}_set_${setNum + 1}',
                 workoutId: workoutId,
                 setNumber: setNum + 1,
-                suggestedReps: Value(_getTargetReps(weekNum)),
+                suggestedReps: Value(targetRepsInt),
                 suggestedWeight: Value(calculatedWeight),
               ),
               mode: InsertMode.insertOrReplace,
@@ -370,20 +371,20 @@ class DatabaseSeeder {
     return workoutName.toLowerCase().replaceAll(' ', '-');
   }
 
-  int _getTargetReps(int weekNumber) {
+  String _getTargetReps(int weekNumber) {
     // Week cycle: week1=12, week2=9, week3=6, week4=3, then repeat
     final cycleWeek = ((weekNumber - 1) % 4) + 1;
     switch (cycleWeek) {
       case 1:
-        return 12;
+        return '12';
       case 2:
-        return 9;
+        return '9';
       case 3:
-        return 6;
+        return '6';
       case 4:
-        return 3;
+        return '3';
       default:
-        return 12;
+        return '12';
     }
   }
 
