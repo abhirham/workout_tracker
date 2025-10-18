@@ -25,10 +25,12 @@ interface WorkoutConfig {
 
 interface Workout {
   id: string;
-  name: string;
-  type: 'Weight' | 'Timer';
-  muscleGroups: string[];
-  equipment: string[];
+  globalWorkoutId: string;  // Reference to global_workouts collection
+  // Display data (fetched from global_workouts, not stored in Firestore)
+  name?: string;
+  type?: 'Weight' | 'Timer';
+  muscleGroups?: string[];
+  equipment?: string[];
   config: WorkoutConfig;
 }
 
@@ -135,10 +137,15 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
 
   const handleAddAndContinue = () => {
     if (selectedWorkout) {
-      // Add workout to day
+      // Add workout to day (with globalWorkoutId + display data)
       onAdd({
         id: `workout-${Date.now()}`,
-        ...selectedWorkout,
+        globalWorkoutId: selectedWorkout.id,  // Save reference to global workout
+        // Include display data for UI (not saved to Firestore)
+        name: selectedWorkout.name,
+        type: selectedWorkout.type,
+        muscleGroups: selectedWorkout.muscleGroups,
+        equipment: selectedWorkout.equipment,
         config: workoutConfig,
       });
 
@@ -199,7 +206,12 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
     if (activeTab === 'existing' && selectedWorkout) {
       onAdd({
         id: `workout-${Date.now()}`,
-        ...selectedWorkout,
+        globalWorkoutId: selectedWorkout.id,  // Save reference to global workout
+        // Include display data for UI (not saved to Firestore)
+        name: selectedWorkout.name,
+        type: selectedWorkout.type,
+        muscleGroups: selectedWorkout.muscleGroups,
+        equipment: selectedWorkout.equipment,
         config: workoutConfig,
       });
       handleClose();
@@ -228,9 +240,11 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
           updatedAt: Timestamp.now(),
         });
 
-        // Add to day with config
+        // Add to day with globalWorkoutId + config
         const newWorkout = {
           id: `workout-${Date.now()}`,
+          globalWorkoutId: docRef.id,  // Save reference to global workout
+          // Include display data for UI (not saved to Firestore)
           name: trimmedName,
           type: newWorkoutType,
           muscleGroups: selectedMuscleGroups,
@@ -272,9 +286,11 @@ export default function AddWorkoutModal({ isOpen, onClose, onAdd, editingWorkout
           updatedAt: Timestamp.now(),
         });
 
-        // Add to day with config
+        // Add to day with globalWorkoutId + config
         const newWorkout = {
-          id: docRef.id,
+          id: `workout-${Date.now()}`,
+          globalWorkoutId: docRef.id,  // Save reference to global workout
+          // Include display data for UI (not saved to Firestore)
           name: trimmedName,
           type: newWorkoutType,
           muscleGroups: selectedMuscleGroups,

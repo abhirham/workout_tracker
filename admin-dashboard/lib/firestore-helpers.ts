@@ -124,12 +124,8 @@ export async function checkGlobalWorkoutReferences(globalWorkoutId: string): Pro
           );
 
           const hasWorkout = workoutsSnapshot.docs.some(workoutDoc => {
-            // Check if this workout references the global workout
-            // The actual field name depends on your schema
-            // Assuming the workout has a 'name' field that matches the global workout name
-            // Or you might need to store globalWorkoutId in the workout document
-            return workoutDoc.data().name === globalWorkoutId ||
-                   workoutDoc.data().globalWorkoutId === globalWorkoutId;
+            // Check if this workout references the global workout by globalWorkoutId
+            return workoutDoc.data().globalWorkoutId === globalWorkoutId;
           });
 
           if (hasWorkout) {

@@ -38,10 +38,12 @@ import { useConfirm } from '@/app/hooks/useConfirm';
 
 interface Workout {
   id: string;
-  name: string;
-  type: 'Weight' | 'Timer';
-  muscleGroups: string[];
-  equipment: string[];
+  globalWorkoutId: string;  // Reference to global_workouts collection
+  // Display data (fetched from global_workouts, not stored in Firestore)
+  name?: string;
+  type?: 'Weight' | 'Timer';
+  muscleGroups?: string[];
+  equipment?: string[];
   order?: number;
   config: {
     baseWeight?: number;
@@ -229,15 +231,28 @@ export default function EditPlanPage() {
                 collection(db, 'workout_plans', planId, 'weeks', weekDoc.id, 'days', dayDoc.id, 'workouts')
               );
 
-              const workouts = workoutsSnapshot.docs
-                .map((workoutDoc) => {
+              // Fetch global workout data for all workouts in this day
+              const workouts = await Promise.all(
+                workoutsSnapshot.docs.map(async (workoutDoc) => {
                   const workoutData = workoutDoc.data();
+
+                  // Fetch global workout data if globalWorkoutId exists
+                  let globalWorkoutData = null;
+                  if (workoutData.globalWorkoutId) {
+                    const globalWorkoutDoc = await getDoc(doc(db, 'global_workouts', workoutData.globalWorkoutId));
+                    if (globalWorkoutDoc.exists()) {
+                      globalWorkoutData = globalWorkoutDoc.data();
+                    }
+                  }
+
                   return {
                     id: workoutDoc.id,
-                    name: workoutData.name || '',
-                    type: workoutData.type || 'Weight',
-                    muscleGroups: workoutData.muscleGroups || [],
-                    equipment: workoutData.equipment || [],
+                    globalWorkoutId: workoutData.globalWorkoutId || '',
+                    // Display data from global workout (or fallback to legacy data)
+                    name: globalWorkoutData?.name || workoutData.name || '',
+                    type: (globalWorkoutData?.type || workoutData.type || 'Weight') as 'Weight' | 'Timer',
+                    muscleGroups: globalWorkoutData?.muscleGroups || workoutData.muscleGroups || [],
+                    equipment: globalWorkoutData?.equipment || workoutData.equipment || [],
                     order: workoutData.order || 0,
                     config: {
                       baseWeight: workoutData.baseWeight,
@@ -248,7 +263,10 @@ export default function EditPlanPage() {
                     },
                   };
                 })
-                .sort((a, b) => a.order - b.order);
+              );
+
+              // Sort by order
+              workouts.sort((a, b) => (a.order || 0) - (b.order || 0));
 
               return {
                 id: dayDoc.id,
@@ -541,16 +559,14 @@ export default function EditPlanPage() {
   // Helper functions for change detection
   const hasWorkoutChanged = (w1: Workout, w2: Workout): boolean => {
     return (
-      w1.name !== w2.name ||
-      w1.type !== w2.type ||
+      w1.globalWorkoutId !== w2.globalWorkoutId ||  // Check if global workout reference changed
       w1.order !== w2.order ||
       w1.config.baseWeight !== w2.config.baseWeight ||
       w1.config.targetReps !== w2.config.targetReps ||
       w1.config.numSets !== w2.config.numSets ||
       w1.config.restTimer !== w2.config.restTimer ||
-      w1.config.workoutDuration !== w2.config.workoutDuration ||
-      JSON.stringify(w1.muscleGroups) !== JSON.stringify(w2.muscleGroups) ||
-      JSON.stringify(w1.equipment) !== JSON.stringify(w2.equipment)
+      w1.config.workoutDuration !== w2.config.workoutDuration
+      // Note: Don't compare name, type, muscleGroups, equipment as they're fetched from global_workouts
     );
   };
 
@@ -764,12 +780,9 @@ export default function EditPlanPage() {
             const order = day.workouts.indexOf(workout) + 1;
 
             if (isNewWorkout) {
-              // New workout: use setDoc
+              // New workout: use setDoc (save only globalWorkoutId + config)
               await setDoc(workoutRef, {
-                name: workout.name,
-                type: workout.type,
-                muscleGroups: workout.muscleGroups || [],
-                equipment: workout.equipment || [],
+                globalWorkoutId: workout.globalWorkoutId,  // Reference to global workout
                 order,
                 numSets: workout.config.numSets,
                 targetReps: workout.config.targetReps || null,
@@ -780,12 +793,9 @@ export default function EditPlanPage() {
                 updatedAt: Timestamp.now(),
               });
             } else if (workoutChanged) {
-              // Workout changed: update only changed fields
+              // Workout changed: update only changed fields (no name, type, muscleGroups, equipment)
               await updateDoc(workoutRef, {
-                name: workout.name,
-                type: workout.type,
-                muscleGroups: workout.muscleGroups || [],
-                equipment: workout.equipment || [],
+                globalWorkoutId: workout.globalWorkoutId,  // Reference to global workout
                 order,
                 numSets: workout.config.numSets,
                 targetReps: workout.config.targetReps || null,
