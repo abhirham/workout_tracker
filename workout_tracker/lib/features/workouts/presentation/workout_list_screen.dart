@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/database/database_provider.dart';
+import '../../../core/services/user_service.dart';
 import '../../../shared/models/workout_alternative.dart';
 import '../../../shared/models/completed_set.dart';
 import '../../../shared/models/global_workout.dart';
@@ -126,7 +127,8 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
 
   Future<void> _loadWorkoutProgress() async {
     final repository = ref.read(completedSetRepositoryProvider);
-    const userId = 'temp_user_id'; // TODO: Get actual userId from auth/profile
+    final userService = ref.read(userServiceProvider);
+    final userId = userService.getCurrentUserIdOrThrow();
     final currentWorkout = workouts[currentWorkoutIndex];
     final workoutId = currentWorkout['id'] as String;
     final globalWorkoutId = currentWorkout['globalWorkoutId'] as String;
@@ -340,7 +342,8 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   Future<void> _saveSet(Map<String, dynamic> set, int setIndex) async {
     // Save to database
     final repository = ref.read(completedSetRepositoryProvider);
-    const userId = 'temp_user_id'; // TODO: Get actual userId from auth/profile
+    final userService = ref.read(userServiceProvider);
+    final userId = userService.getCurrentUserIdOrThrow();
     final currentWorkout = workouts[currentWorkoutIndex];
     const uuid = Uuid();
 
@@ -413,8 +416,8 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
 
     // Load alternatives from repository
     final repository = ref.read(workoutAlternativeRepositoryProvider);
-    // TODO: Get actual userId from auth/profile
-    const userId = 'temp_user_id'; // Placeholder until auth is implemented
+    final userService = ref.read(userServiceProvider);
+    final userId = userService.getCurrentUserIdOrThrow();
 
     final alternatives = await repository.getAlternativesForWorkout(
       userId,

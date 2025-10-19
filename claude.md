@@ -598,3 +598,4 @@ IMMEDIATELY after implementing any front-end change in admin-dashboard:
 - Riverpod documentation: https://riverpod.dev
 - Drift documentation: https://drift.simonbinder.eu
 - always run 'npm run dev' on port 3001. Kill any processes running on 3001 and strictly use only that.
+- when ever you complete a task in @todo.md , mark it as completed so that you know exactly whats remaining.

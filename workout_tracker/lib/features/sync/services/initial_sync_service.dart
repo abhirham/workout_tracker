@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'template_sync_service.dart';
@@ -63,7 +64,7 @@ class InitialSyncService {
 }
 
 @riverpod
-InitialSyncService initialSyncService(InitialSyncServiceRef ref) {
+InitialSyncService initialSyncService(Ref ref) {
   final templateSyncService = ref.watch(templateSyncServiceProvider);
   return InitialSyncService(templateSyncService);
 }

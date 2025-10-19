@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:workout_tracker/features/sync/services/auth_service.dart';
+import 'package:workout_tracker/features/sync/services/sync_queue_processor.dart';
+import 'package:workout_tracker/features/workout_plans/data/workout_plan_repository.dart';
 
 class WorkoutPlanListScreen extends ConsumerWidget {
   const WorkoutPlanListScreen({super.key});
@@ -11,12 +13,8 @@ class WorkoutPlanListScreen extends ConsumerWidget {
     final authService = ref.watch(authServiceProvider);
     final currentUser = authService.currentUser;
 
-    // TODO: Replace with actual data from repository
-    final mockPlans = [
-      {'id': '1', 'name': 'Beginner Strength Training', 'weeks': 12},
-      {'id': '2', 'name': 'Advanced Powerlifting', 'weeks': 16},
-      {'id': '3', 'name': 'Hypertrophy Program', 'weeks': 8},
-    ];
+    // Load workout plans from database
+    final plansAsync = ref.watch(workoutPlansWithDetailsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -26,7 +24,20 @@ class WorkoutPlanListScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.sync),
             onPressed: () {
-              // TODO: Trigger sync
+              // Trigger manual sync
+              final syncProcessor = ref.read(syncQueueProcessorProvider);
+              syncProcessor.processQueue();
+
+              // Refresh the plans list
+              ref.invalidate(workoutPlansWithDetailsProvider);
+
+              // Show feedback
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Syncing...'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
             },
             tooltip: 'Sync',
           ),
@@ -80,20 +91,49 @@ class WorkoutPlanListScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: mockPlans.isEmpty
-          ? _buildEmptyState(context)
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: mockPlans.length,
-              itemBuilder: (context, index) {
-                final plan = mockPlans[index];
-                return _buildPlanCard(context, plan);
-              },
-            ),
+      body: plansAsync.when(
+        data: (plans) {
+          if (plans.isEmpty) {
+            return _buildEmptyState(context, ref);
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: plans.length,
+            itemBuilder: (context, index) {
+              final plan = plans[index];
+              return _buildPlanCard(context, plan);
+            },
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stack) => Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Error loading workout plans',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                error.toString(),
+                style: Theme.of(context).textTheme.bodySmall,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _buildEmptyState(BuildContext context) {
+  Widget _buildEmptyState(BuildContext context, WidgetRef ref) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -110,21 +150,23 @@ class WorkoutPlanListScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Pull down to sync plans from admin',
+            'Contact your admin to get workout plans assigned',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context)
                       .colorScheme
                       .onSurface
                       .withOpacity(0.6),
                 ),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 32),
           FilledButton.icon(
             onPressed: () {
-              // TODO: Trigger sync
+              // Refresh the provider to re-fetch data
+              ref.invalidate(workoutPlansWithDetailsProvider);
             },
-            icon: const Icon(Icons.sync),
-            label: const Text('Sync Plans'),
+            icon: const Icon(Icons.refresh),
+            label: const Text('Refresh'),
           ),
         ],
       ),
@@ -172,7 +214,7 @@ class WorkoutPlanListScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${plan['weeks']} weeks',
+                      '${plan['totalWeeks']} weeks',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: Theme.of(context)
                                 .colorScheme

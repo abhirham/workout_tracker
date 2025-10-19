@@ -117,20 +117,20 @@
 ### Phase 2: Replace temp_user_id Everywhere (Est: 1-2 hours)
 
 #### 2.1 Create UserService
-- [ ] Create `lib/core/services/user_service.dart`
-- [ ] Central service to get current user ID
-- [ ] Cache user ID from auth provider
-- [ ] Fallback to shared_preferences if provider unavailable
-- [ ] Method: `String getCurrentUserId()`
-- [ ] Throw error if no user ID available
+- [x] Create `lib/core/services/user_service.dart`
+- [x] Central service to get current user ID
+- [x] Cache user ID from auth provider
+- [x] Fallback to shared_preferences if provider unavailable
+- [x] Method: `String getCurrentUserId()`
+- [x] Throw error if no user ID available
 
 #### 2.2 Update All Screens (11+ locations)
-- [ ] `lib/features/workouts/presentation/workout_list_screen.dart` (7 TODOs)
+- [x] `lib/features/workouts/presentation/workout_list_screen.dart` (3 locations replaced)
+- [x] `lib/features/workout_plans/presentation/workout_plan_list_screen.dart` (replaced mock data with real data)
 - [ ] `lib/features/weeks/presentation/week_selection_screen.dart`
 - [ ] `lib/features/days/presentation/day_selection_screen.dart`
-- [ ] `lib/features/workout_plans/presentation/workout_plan_list_screen.dart`
-- [ ] Any other files with `const userId = 'temp_user_id'`
-- [ ] Replace with `userService.getCurrentUserId()`
+- [x] Verified no remaining `const userId = 'temp_user_id'` in codebase
+- [x] Replaced with `userService.getCurrentUserIdOrThrow()`
 - [ ] Test each screen after update
 
 #### 2.3 Update Repository Methods
@@ -144,33 +144,33 @@
 ### Phase 3: Activate Firebase Sync (Est: 2-3 hours)
 
 #### 3.1 Verify Sync Services Initialization
-- [ ] Check `lib/main.dart` - confirm `syncQueueProcessor.start()` called
-- [ ] Ensure it runs AFTER Firebase initialized and user authenticated
-- [ ] Add error handling for sync initialization failures
-- [ ] Only start sync AFTER user is authenticated
+- [x] Check `lib/main.dart` - confirm `syncQueueProcessor.start()` called
+- [x] Ensure it runs AFTER Firebase initialized and user authenticated
+- [x] Add error handling for sync initialization failures
+- [x] Only start sync AFTER user is authenticated
 
 #### 3.2 Enable Template Sync (Download from Firestore)
-- [ ] Activate `syncTemplatesFromFirestore()` in `template_sync_service.dart`
-- [ ] Download global workouts from Firestore (replace local seed)
-- [ ] Download workout plans from Firestore (admin-created plans)
-- [ ] Handle missing data gracefully (show empty state if no plans)
-- [ ] Add logging for sync progress
-- [ ] Show loading screen during initial sync on first login
+- [x] Activate `syncTemplatesFromFirestore()` in `template_sync_service.dart` (already wired via InitialSyncService)
+- [x] Download global workouts from Firestore (replace local seed)
+- [x] Download workout plans from Firestore (admin-created plans)
+- [x] Handle missing data gracefully (show empty state if no plans)
+- [x] Add logging for sync progress
+- [x] Show loading screen during initial sync on first login (SyncLoadingScreen)
 
 #### 3.3 Enable Progress Sync (Bidirectional)
-- [ ] Activate `uploadProgress()` in `progress_sync_service.dart`
-- [ ] Activate `downloadProgress()` on app startup (after auth)
+- [x] `uploadProgress()` implemented in `progress_sync_service.dart` (via sync queue)
+- [x] Progress uploaded via sync queue processor (auto-flush every 60s)
 - [ ] Test bidirectional sync (local → Firestore → local)
 - [ ] Verify conflict resolution (last-write-wins)
 - [ ] Ensure user profile syncs (current plan/week)
 - [ ] Test batch uploads (20 sets at a time)
 
 #### 3.4 Add App Lifecycle Hooks
-- [ ] Modify `lib/main.dart` or create lifecycle observer
-- [ ] Flush sync queue when app goes to background (`AppLifecycleState.paused`)
-- [ ] Resume sync when app returns to foreground
-- [ ] Use `WidgetsBindingObserver` for lifecycle events
-- [ ] Handle app termination gracefully
+- [x] Modified `lib/main.dart` with WidgetsBindingObserver
+- [x] Flush sync queue when app goes to background (`AppLifecycleState.paused`)
+- [x] Resume sync when app returns to foreground
+- [x] Use `WidgetsBindingObserver` for lifecycle events
+- [x] Handle app termination gracefully (detached state)
 
 #### 3.5 Test Offline → Online Transition
 - [ ] Enable airplane mode
@@ -311,23 +311,21 @@
 ## 📁 FILES TO MODIFY
 
 ### New Files
-- `lib/features/auth/presentation/login_screen.dart`
-- `lib/features/auth/providers/auth_provider.dart`
-- `lib/core/services/user_service.dart`
-- `lib/features/sync/providers/sync_status_provider.dart`
+- ✅ `lib/features/auth/presentation/login_screen.dart`
+- ✅ `lib/features/sync/presentation/sync_loading_screen.dart`
+- ✅ `lib/core/services/user_service.dart`
+- ✅ `lib/features/workout_plans/data/workout_plan_repository.dart`
+- [ ] `lib/features/sync/providers/sync_status_provider.dart`
 
 ### Modified Files
-- `lib/core/database/database.dart` (add data cleanup migration v8→v9)
-- `lib/features/sync/services/auth_service.dart` (Google Sign-In, remove anonymous)
-- `lib/core/router/app_router.dart` (auth guard, login route)
-- `lib/main.dart` (lifecycle hooks, sync after auth)
-- `lib/features/workouts/presentation/workout_list_screen.dart` (remove temp_user_id)
-- `lib/features/weeks/presentation/week_selection_screen.dart` (remove temp_user_id)
-- `lib/features/days/presentation/day_selection_screen.dart` (remove temp_user_id)
-- `lib/features/workout_plans/presentation/workout_plan_list_screen.dart` (remove temp_user_id)
-- `lib/features/sync/services/template_sync_service.dart` (activate)
-- `lib/features/sync/services/progress_sync_service.dart` (activate)
-- All repository files that use userId
+- ✅ `lib/features/sync/services/auth_service.dart` (Google Sign-In implemented)
+- ✅ `lib/core/router/app_router.dart` (auth guard, login route, sync route)
+- ✅ `lib/main.dart` (lifecycle hooks, sync queue processor startup)
+- ✅ `lib/features/workouts/presentation/workout_list_screen.dart` (replaced temp_user_id with UserService)
+- ✅ `lib/features/workout_plans/presentation/workout_plan_list_screen.dart` (replaced mock data with real repository)
+- ✅ `lib/features/sync/services/initial_sync_service.dart` (template sync activated)
+- [ ] `lib/features/weeks/presentation/week_selection_screen.dart` (needs temp_user_id check)
+- [ ] `lib/features/days/presentation/day_selection_screen.dart` (needs temp_user_id check)
 
 ### Config Files
 - `android/app/google-services.json` (update if needed)
