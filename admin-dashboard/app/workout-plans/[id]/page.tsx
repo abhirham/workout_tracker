@@ -284,6 +284,9 @@ export default function EditPlanPage() {
         })
       );
 
+      // Sort weeks by weekNumber
+      weeks.sort((a, b) => (a.number || 0) - (b.number || 0));
+
       const loadedPlan = {
         id: planDoc.id,
         name: planData.name || '',
@@ -316,12 +319,13 @@ export default function EditPlanPage() {
     const currentWeek = plan.weeks[activeWeekIndex];
     if (!currentWeek) return;
 
+    const baseTimestamp = Date.now();
     const copiedWeek: Week = {
-      id: `week-${Date.now()}`,
+      id: `week-${baseTimestamp}`,
       number: plan.weeks.length + 1,
-      days: currentWeek.days.map(day => ({
+      days: currentWeek.days.map((day, index) => ({
         ...day,
-        id: `day-${Date.now()}-${day.id}`,
+        id: `day-${baseTimestamp + index}`,  // Generate fresh ID, don't concatenate old one
         name: day.name, // Keep original name without "(Copy)"
       })),
     };
@@ -945,6 +949,7 @@ export default function EditPlanPage() {
             name: day.name,
             workouts: day.workouts.map((workout: any, workoutIdx: number) => ({
               id: `workout-${timestamp}-${weekIdx}-${dayIdx}-${workoutIdx}`,
+              globalWorkoutId: workout.globalWorkoutId,  // Preserve reference to global workout
               name: workout.name,
               type: workout.type,
               muscleGroups: workout.muscleGroups || [],
