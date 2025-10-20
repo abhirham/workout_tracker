@@ -72,13 +72,16 @@ class TemplateSyncService {
         final equipmentCsv = equipment.join(',');
         final searchKeywordsCsv = searchKeywords.join(',');
 
+        // Normalize type to lowercase (Firestore may have "Weight"/"Timer")
+        final workoutType = (data['type'] as String).toLowerCase();
+
         await _database
             .into(_database.globalWorkouts)
             .insertOnConflictUpdate(
               GlobalWorkoutsCompanion.insert(
                 id: doc.id,
                 name: data['name'] as String,
-                type: data['type'] as String,
+                type: workoutType,
                 muscleGroups: muscleGroupsCsv,
                 equipment: equipmentCsv,
                 searchKeywords: searchKeywordsCsv,

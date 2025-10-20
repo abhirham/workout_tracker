@@ -94,7 +94,7 @@ class GlobalWorkoutRepository {
     return GlobalWorkout(
       id: row.id,
       name: row.name,
-      type: row.type == 'weight' ? WorkoutType.weight : WorkoutType.timer,
+      type: row.type.toLowerCase() == 'weight' ? WorkoutType.weight : WorkoutType.timer,
       muscleGroups: muscleGroups,
       equipment: equipment,
       searchKeywords: searchKeywords,
