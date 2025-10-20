@@ -323,6 +323,32 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   }
 
   Future<void> _saveSet(Map<String, dynamic> set, int setIndex) async {
+    // Validate weight workout fields
+    if (currentWorkoutType == WorkoutType.weight) {
+      final weight = set['actualWeight'] as double?;
+      final reps = set['actualReps'] as int?;
+
+      if (weight == null || weight <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter a valid weight'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+
+      if (reps == null || reps <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter valid reps'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+    }
+
     // Save to database
     final repository = ref.read(completedSetRepositoryProvider);
     final userService = ref.read(userServiceProvider);
