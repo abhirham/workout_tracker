@@ -402,15 +402,10 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     setState(() {
       set['completed'] = true;
 
-      // Only start rest timer if not the last set (and only for weight workouts)
+      // Start rest timer if not the last set (for both weight and timer workouts)
       final sets = currentWorkout['sets'] as List;
       if (setIndex < sets.length - 1) {
-        if (currentWorkoutType == WorkoutType.weight) {
-          _startTimer(); // Rest timer for weight workouts
-        } else {
-          // For timer workouts, just move to next set
-          currentSetIndex = setIndex + 1;
-        }
+        _startTimer(); // Rest timer for all workout types
       } else {
         // Last set - move to next set index without timer
         currentSetIndex = setIndex + 1;
