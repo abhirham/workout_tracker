@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:workout_tracker/core/database/app_database.dart';
 import 'package:workout_tracker/core/database/database_provider.dart';
+import 'package:workout_tracker/core/services/user_service.dart';
+import 'package:workout_tracker/features/workouts/data/workout_template_repository.dart';
+import 'package:workout_tracker/features/workouts/data/completed_set_repository.dart';
 
 class WeekSelectionScreen extends ConsumerStatefulWidget {
   final String planId;
@@ -21,6 +24,7 @@ class WeekSelectionScreen extends ConsumerStatefulWidget {
 class _WeekSelectionScreenState extends ConsumerState<WeekSelectionScreen> {
   List<Week> weeks = [];
   Map<String, int> dayCounts = {};
+  Map<String, int> completedDayCounts = {};
   bool isLoading = true;
 
   @override
@@ -37,19 +41,79 @@ class _WeekSelectionScreenState extends ConsumerState<WeekSelectionScreen> {
     });
 
     final repository = ref.read(weekRepositoryProvider);
+    final dayRepository = ref.read(dayRepositoryProvider);
+    final workoutRepository = ref.read(workoutTemplateRepositoryProvider);
+    final completedSetRepository = ref.read(completedSetRepositoryProvider);
+    final userService = ref.read(userServiceProvider);
+
+    final userId = userService.getCurrentUserIdOrThrow();
     final loadedWeeks = await repository.getWeeksForPlan(widget.planId);
 
-    // Load day counts for each week
+    // Load day counts and completion status for each week
     final counts = <String, int>{};
+    final completedCounts = <String, int>{};
+
     for (final week in loadedWeeks) {
-      counts[week.id] = await repository.getDayCountForWeek(week.id);
+      final days = await dayRepository.getDaysForWeek(week.id);
+      counts[week.id] = days.length;
+
+      // Count completed days
+      int completedDays = 0;
+      for (final day in days) {
+        final isCompleted = await _isDayCompleted(
+          userId,
+          week.id,
+          day.id,
+          workoutRepository,
+          completedSetRepository,
+        );
+        if (isCompleted) completedDays++;
+      }
+      completedCounts[week.id] = completedDays;
     }
 
     setState(() {
       weeks = loadedWeeks;
       dayCounts = counts;
+      completedDayCounts = completedCounts;
       isLoading = false;
     });
+  }
+
+  /// Check if a day is completed (all workouts have all sets completed)
+  Future<bool> _isDayCompleted(
+    String userId,
+    String weekId,
+    String dayId,
+    WorkoutTemplateRepository workoutRepository,
+    CompletedSetRepository completedSetRepository,
+  ) async {
+    // Get all workouts for this day
+    final workoutsWithSets = await workoutRepository.getWorkoutsForDay(dayId);
+
+    if (workoutsWithSets.isEmpty) return false;
+
+    // Check each workout
+    for (final workoutWithSets in workoutsWithSets) {
+      final workout = workoutWithSets.workout;
+      final totalSets = workoutWithSets.sets.length;
+
+      if (totalSets == 0) continue;
+
+      // Get completed sets for this workout
+      final completedSets = await completedSetRepository.getCompletedSetsForWorkout(
+        userId,
+        weekId,
+        workout.id,
+      );
+
+      // Check if all sets are completed
+      if (completedSets.length < totalSets) {
+        return false; // Not all sets completed
+      }
+    }
+
+    return true; // All workouts have all sets completed
   }
 
   @override
@@ -80,8 +144,7 @@ class _WeekSelectionScreenState extends ConsumerState<WeekSelectionScreen> {
   }
 
   Widget _buildWeekCard(BuildContext context, Week week) {
-    // TODO: Track completed days (requires progress tracking)
-    final daysCompleted = 0;
+    final daysCompleted = completedDayCounts[week.id] ?? 0;
     final totalDays = dayCounts[week.id] ?? 0;
     final progress = totalDays > 0 ? daysCompleted / totalDays : 0.0;
 

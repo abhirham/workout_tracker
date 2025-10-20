@@ -127,17 +127,17 @@
 #### 2.2 Update All Screens (11+ locations)
 - [x] `lib/features/workouts/presentation/workout_list_screen.dart` (3 locations replaced)
 - [x] `lib/features/workout_plans/presentation/workout_plan_list_screen.dart` (replaced mock data with real data)
-- [ ] `lib/features/weeks/presentation/week_selection_screen.dart`
-- [ ] `lib/features/days/presentation/day_selection_screen.dart`
+- [x] `lib/features/weeks/presentation/week_selection_screen.dart` (progress tracking with userId)
+- [x] `lib/features/days/presentation/day_selection_screen.dart` (completion status with userId)
 - [x] Verified no remaining `const userId = 'temp_user_id'` in codebase
 - [x] Replaced with `userService.getCurrentUserIdOrThrow()`
-- [ ] Test each screen after update
+- [ ] Test each screen after update (pending flutter run)
 
 #### 2.3 Update Repository Methods
-- [ ] Pass `userId` from UI to repositories
-- [ ] Update database queries to filter by `userId`
-- [ ] Ensure all `CompletedSet` inserts include correct `userId`
-- [ ] Update `UserProfile` creation with real user data
+- [x] Pass `userId` from UI to repositories (already implemented in all repositories)
+- [x] Update database queries to filter by `userId` (already implemented)
+- [x] Ensure all `CompletedSet` inserts include correct `userId` (already implemented)
+- [x] Update `UserProfile` creation with real user data (already implemented)
 
 ---
 
