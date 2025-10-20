@@ -30,23 +30,6 @@ class WorkoutListScreen extends ConsumerStatefulWidget {
 }
 
 class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
-  // Calculate reps based on week number: week1=12, week2=9, week3=6, week4=3, then repeat
-  int get targetRepsForWeek {
-    final cycleWeek = ((widget.weekNumber - 1) % 4) + 1;
-    switch (cycleWeek) {
-      case 1:
-        return 12;
-      case 2:
-        return 9;
-      case 3:
-        return 6;
-      case 4:
-        return 3;
-      default:
-        return 12;
-    }
-  }
-
   // Workouts loaded from database
   List<Map<String, dynamic>> workouts = [];
   bool isLoading = true;

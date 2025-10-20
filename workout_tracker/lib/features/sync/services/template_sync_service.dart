@@ -15,6 +15,24 @@ class TemplateSyncService {
 
   TemplateSyncService(this._firestore, this._database);
 
+  /// Helper to safely parse int from Firestore (handles both string and number)
+  int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value);
+    if (value is num) return value.toInt();
+    return null;
+  }
+
+  /// Helper to safely parse double from Firestore (handles both string and number)
+  double? _parseDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is String) return double.tryParse(value);
+    if (value is num) return value.toDouble();
+    return null;
+  }
+
   /// Sync all global workouts from Firestore to local DB
   Future<void> syncGlobalWorkouts() async {
     try {
@@ -100,6 +118,9 @@ class TemplateSyncService {
             WorkoutPlansCompanion.insert(
               id: planId,
               name: planData['name'] as String,
+              description: Value(planData['description'] as String?),
+              totalWeeks: _parseInt(planData['totalWeeks']) ?? 1,
+              isActive: Value(planData['isActive'] as bool? ?? true),
               createdAt: (planData['createdAt'] as Timestamp).toDate(),
               updatedAt: (planData['updatedAt'] as Timestamp).toDate(),
             ),
@@ -120,8 +141,10 @@ class TemplateSyncService {
               WeeksCompanion.insert(
                 id: weekDoc.id,
                 planId: planId,
-                weekNumber: weekData['weekNumber'] as int,
+                weekNumber: _parseInt(weekData['weekNumber']) ?? 1,
                 name: weekData['name'] as String,
+                createdAt: (weekData['createdAt'] as Timestamp).toDate(),
+                updatedAt: (weekData['updatedAt'] as Timestamp).toDate(),
               ),
             );
 
@@ -142,8 +165,10 @@ class TemplateSyncService {
                 DaysCompanion.insert(
                   id: dayDoc.id,
                   weekId: weekDoc.id,
-                  dayNumber: int.parse(dayData['dayNumber']),
+                  dayNumber: _parseInt(dayData['dayNumber']) ?? 1,
                   name: dayData['name'] as String,
+                  createdAt: (dayData['createdAt'] as Timestamp).toDate(),
+                  updatedAt: (dayData['updatedAt'] as Timestamp).toDate(),
                 ),
               );
 
@@ -178,20 +203,16 @@ class TemplateSyncService {
             final globalWorkoutData = globalWorkoutDoc.data()!;
             final workoutName = globalWorkoutData['name'] as String;
 
-            // Parse baseWeights and alternativeWorkouts from Firestore arrays
-            final baseWeights = (workoutData['baseWeights'] as List<dynamic>?)
-                ?.map((e) => (e as num).toDouble())
-                .toList();
+            // Parse baseWeight (single number) and alternativeWorkouts from Firestore
+            final baseWeight = _parseDouble(workoutData['baseWeight']);
             final alternativeWorkouts =
                 (workoutData['alternativeWorkouts'] as List<dynamic>?)
                     ?.map((e) => e.toString())
                     .toList();
 
-            // Convert to CSV for local storage
-            final baseWeightsCsv = baseWeights
-                ?.map((w) => w.toString())
-                .join(',');
+            // Convert alternativeWorkouts to CSV for local storage
             final alternativeWorkoutsCsv = alternativeWorkouts?.join(',');
+            final numSets = _parseInt(workoutData['numSets']) ?? 3;
             await _database
                 .into(_database.workouts)
                 .insertOnConflictUpdate(
@@ -201,15 +222,16 @@ class TemplateSyncService {
                     globalWorkoutId: globalWorkoutId,
                     dayId: dayDoc.id,
                     name: workoutName,
-                    order: workoutData['order'] as int,
+                    order: _parseInt(workoutData['order']) ?? 1,
+                    numSets: numSets,
                     notes: Value(workoutData['notes'] as String?),
-                    baseWeights: Value(baseWeightsCsv),
+                    baseWeight: Value(baseWeight),
                     targetReps: Value(workoutData['targetReps'] as String?),
                     restTimerSeconds: Value(
-                      workoutData['restTimerSeconds'] as int?,
+                      _parseInt(workoutData['restTimerSeconds']),
                     ),
                     workoutDurationSeconds: Value(
-                      workoutData['workoutDurationSeconds'] as int?,
+                      _parseInt(workoutData['workoutDurationSeconds']),
                     ),
                     alternativeWorkouts: Value(alternativeWorkoutsCsv),
                     createdAt: (workoutData['createdAt'] as Timestamp).toDate(),
@@ -217,8 +239,24 @@ class TemplateSyncService {
                   ),
                 );
 
-            // 5. Sync set templates (optional - for now, we generate them from baseWeights)
-            // SetTemplates can be derived from baseWeights array, so we may skip syncing them
+            // 5. Sync set templates
+            // Generate set templates based on numSets (already extracted above)
+            for (int setNum = 1; setNum <= numSets; setNum++) {
+              await _database
+                  .into(_database.setTemplates)
+                  .insertOnConflictUpdate(
+                    SetTemplatesCompanion.insert(
+                      id: '${workoutDoc.id}_set_$setNum',
+                      workoutId: workoutDoc.id,
+                      setNumber: setNum,
+                      suggestedReps: Value(null), // Will use targetReps from workout
+                      suggestedWeight: Value(baseWeight), // All sets use same base weight
+                      suggestedDuration: Value(
+                        _parseInt(workoutData['workoutDurationSeconds']),
+                      ),
+                    ),
+                  );
+            }
           }
         }
       }
@@ -262,8 +300,8 @@ class TemplateSyncService {
       await syncAllWorkoutPlans();
 
       // Update last sync timestamp
-      final now = DateTime.now();
       // TODO: Store last sync timestamp in UserProfile or SharedPreferences
+      // final now = DateTime.now();
 
       debugPrint('[TemplateSyncService] Full template sync complete');
     } catch (e, stackTrace) {

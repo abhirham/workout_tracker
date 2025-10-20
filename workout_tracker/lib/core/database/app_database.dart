@@ -27,6 +27,9 @@ class GlobalWorkouts extends Table {
 class WorkoutPlans extends Table {
   TextColumn get id => text()();
   TextColumn get name => text()();
+  TextColumn get description => text().nullable()();
+  IntColumn get totalWeeks => integer()();
+  BoolColumn get isActive => boolean().withDefault(const Constant(true))();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
 
@@ -39,6 +42,8 @@ class Weeks extends Table {
   TextColumn get planId => text().references(WorkoutPlans, #id)();
   IntColumn get weekNumber => integer()();
   TextColumn get name => text()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -49,6 +54,8 @@ class Days extends Table {
   TextColumn get weekId => text().references(Weeks, #id)();
   IntColumn get dayNumber => integer()();
   TextColumn get name => text()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -61,8 +68,9 @@ class Workouts extends Table {
   TextColumn get dayId => text().references(Days, #id)();
   TextColumn get name => text()();  // Display name (e.g., "Bench Press")
   IntColumn get order => integer()();
+  IntColumn get numSets => integer()();  // Number of sets for this workout
   TextColumn get notes => text().nullable()();
-  TextColumn get baseWeights => text().nullable()();  // JSON array for progressive overload base (null for timer workouts)
+  RealColumn get baseWeight => real().nullable()();  // Base weight for progressive overload (null for timer workouts)
   TextColumn get targetReps => text().nullable()();  // Target reps set by admin per workout (e.g., "12", "8-10", "AMRAP") (null for timer workouts)
   IntColumn get restTimerSeconds => integer().nullable()();  // Rest between sets for weight workouts (null for timer)
   IntColumn get workoutDurationSeconds => integer().nullable()();  // Duration for timer workouts (null for weight)
@@ -188,7 +196,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration {

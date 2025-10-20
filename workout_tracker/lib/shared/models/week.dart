@@ -10,6 +10,8 @@ class Week with _$Week {
     required String planId,
     required int weekNumber,
     required String name,
+    required DateTime createdAt,
+    required DateTime updatedAt,
   }) = _Week;
 
   factory Week.fromJson(Map<String, dynamic> json) => _$WeekFromJson(json);

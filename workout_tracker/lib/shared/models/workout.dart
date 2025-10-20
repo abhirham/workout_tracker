@@ -12,9 +12,10 @@ class Workout with _$Workout {
     required String dayId,
     required String name,
     required int order,
+    required int numSets,  // Number of sets for this workout
     String? notes,
-    List<double>? baseWeights,  // JSON array for progressive overload base (null for timer workouts)
-    int? targetReps,  // Target reps set by admin per workout (null for timer workouts)
+    double? baseWeight,  // Base weight for progressive overload (null for timer workouts)
+    String? targetReps,  // Target reps set by admin per workout (e.g., "12", "8-10", "AMRAP") (null for timer workouts)
     int? restTimerSeconds,  // Rest between sets for weight workouts (null for timer)
     int? workoutDurationSeconds,  // Duration for timer workouts (null for weight)
     List<String>? alternativeWorkouts,  // JSON array of alternative globalWorkoutIds
