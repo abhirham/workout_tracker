@@ -327,8 +327,11 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     if (currentWorkoutType == WorkoutType.weight) {
       final weight = set['actualWeight'] as double?;
       final reps = set['actualReps'] as int?;
+      final suggestedWeight = set['suggestedWeight'] as double?;
+      final isBodyweightExercise = suggestedWeight == null;
 
-      if (weight == null || weight <= 0) {
+      // For bodyweight exercises, allow weight = 0. For weighted exercises, require weight > 0.
+      if (weight == null || (weight < 0) || (!isBodyweightExercise && weight == 0)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please enter a valid weight'),
@@ -761,7 +764,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     final isEnabled = isCurrentSet && !isTimerRunning;
 
     // Get weight from previous set if it exists and current set has no value
-    double? getInitialWeight() {
+    double getInitialWeight() {
       if (set['actualWeight'] != null) {
         return set['actualWeight'] as double;
       }
@@ -775,18 +778,18 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
         }
       }
 
-      // Fall back to suggested weight
-      return set['suggestedWeight'] as double?;
+      // Fall back to suggested weight, or 0 for bodyweight exercises
+      return set['suggestedWeight'] as double? ?? 0.0;
     }
 
     final initialWeight = getInitialWeight();
     // Set the actual weight in the map if not already set
-    if (set['actualWeight'] == null && initialWeight != null) {
+    if (set['actualWeight'] == null) {
       set['actualWeight'] = initialWeight;
     }
 
     final weightController = TextEditingController(
-      text: initialWeight?.toString() ?? '',
+      text: initialWeight.toString(),
     );
 
     // Get target reps from workout (set by admin, e.g., "12", "8-10", "AMRAP")
