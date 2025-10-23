@@ -1,6 +1,8 @@
 # OS Files
 .DS_Store
 Thumbs.db
+Debug/
+Release/
 
 # IDE
 .vscode/

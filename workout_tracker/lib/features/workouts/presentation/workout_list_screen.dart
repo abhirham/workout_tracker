@@ -156,7 +156,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
           // No progress in this week - reset
           if (workoutType == WorkoutType.weight) {
             set['actualWeight'] = null;
-            set['actualReps'] = null;
+            set['actualReps'] = _parseMinTargetReps(currentWorkout['targetReps'] as String?);
           } else {
             set['actualDuration'] = null;
           }
@@ -307,6 +307,25 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     timerSeconds = null;
     // Load progress from database (will reset if no progress exists for current alternative)
     _loadWorkoutProgress();
+  }
+
+  // Parse targetReps string to get minimum target value
+  // Examples: "6-8" -> 6, "12" -> 12, "AMRAP" -> null
+  int? _parseMinTargetReps(String? targetReps) {
+    if (targetReps == null || targetReps.isEmpty) return null;
+
+    if (targetReps.contains('-')) {
+      // Range format like "6-8" -> return 6
+      final parts = targetReps.split('-');
+      if (parts.isNotEmpty) {
+        return int.tryParse(parts[0].trim());
+      }
+    } else if (targetReps.toUpperCase() != 'AMRAP') {
+      // Single number like "12" -> return 12
+      return int.tryParse(targetReps.trim());
+    }
+    // AMRAP or invalid -> return null
+    return null;
   }
 
   // Update all incomplete sets after the current one with the new weight
@@ -796,8 +815,14 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     final targetReps = workout['targetReps'] as String?;
     final actualReps = set['actualReps'];
 
+    // Parse targetReps to get default minimum value
+    int? defaultReps;
+    if (actualReps == null && targetReps != null && targetReps.isNotEmpty) {
+      defaultReps = _parseMinTargetReps(targetReps);
+    }
+
     final repsController = TextEditingController(
-      text: actualReps?.toString() ?? '',
+      text: actualReps?.toString() ?? (defaultReps?.toString() ?? ''),
     );
 
     return InkWell(
