@@ -266,11 +266,3 @@ match /workout_plans/{planId} {
 ## Support
 
 For issues or questions, please refer to the main project documentation or create an issue in the project repository.
-
-I tried:
-
-- rm -rf Pods Podfile.lock .symlinks -> pod install
-- flutter doctor -v -> flutter precache --ios -> cd /Users/abhirhamsavarap/Projects/STS/workout_tracker/ios -> rm -rf Flutter/Flutter.framework Flutter/Flutter.xcframework -> ln -s /Users/abhirhamsavarap/Development/flutter/bin/cache/artifacts/engine/ios/Flutter.xcframework Flutter/Flutter.xcframework -> update ios/Podfile with: `# Point to Flutter
-flutter_application_path = '/Users/abhirhamsavarap/Projects/STS/workout_tracker'
-engine_dir = File.join('/Users/abhirhamsavarap/Development/flutter', 'bin', 'cache', 'artifacts', 'engine')` -> flutter clean -> rm -rf Pods Podfile.lock .symlinks ~/Library/Developer/Xcode/DerivedData/\* -> pod cache clean --all -> pod install --verbose -> flutter pub get -> pod install
-- cd /Users/abhirhamsavarap/Projects/STS/workout_tracker -> flutter clean -> cd ios -> rm -rf Pods -> rm -rf .symlinks -> rm -rf Flutter/Flutter.framework -> rm -rf Flutter/Flutter.xcframework -> rm Podfile.lock -> rm -rf ~/Library/Developer/Xcode/DerivedData/\* -> flutter doctor -v -> which flutter -> flutter --version -> flutter create . --platforms=ios -> pod repo update -> pod install --repo-update -> flutter pub get -> pod install
