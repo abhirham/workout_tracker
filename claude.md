@@ -280,6 +280,7 @@ lib/
 **✅ Fully Implemented:**
 
 **Mobile App:**
+
 - Local database with Drift (SQLite) - Schema v7
 - Global workouts library (22 workouts: 21 weight, 1 timer)
 - Workout plan seeding with 8 weeks of progressive overload
@@ -300,6 +301,7 @@ lib/
 - Updated repositories (CompletedSet, WorkoutAlternative) for new schema
 
 **Admin Dashboard:**
+
 - Google OAuth authentication with admin-only access control
 - Protected routes (all pages require admin auth except /login)
 - Admin user management (add/remove admins, invite-only system)
@@ -317,6 +319,7 @@ lib/
 **🚧 In Progress / Not Yet Implemented:**
 
 **Mobile App:**
+
 - Firebase Authentication integration
 - Firestore sync (templates and progress)
 - Background sync when online
@@ -325,6 +328,7 @@ lib/
 - Rest timer background support (not yet tested)
 
 **Admin Dashboard:**
+
 - Import/export workout plans (JSON/CSV)
 - Analytics dashboard for user progress viewing
 - Activity log for recent user completions
@@ -597,5 +601,5 @@ IMMEDIATELY after implementing any front-end change in admin-dashboard:
 - Firebase documentation: https://firebase.google.com/docs
 - Riverpod documentation: https://riverpod.dev
 - Drift documentation: https://drift.simonbinder.eu
-- always run 'npm run dev' on port 3001. Kill any processes running on 3001 and strictly use only that.
+- always run 'npm run dev' on port 3001. Kill any processes running on 3001 and strictly use only that. Once you are done with all your tasks, kill the process on port 3001.
 - when ever you complete a task in @todo.md , mark it as completed so that you know exactly whats remaining.

@@ -8,6 +8,7 @@ import '../../../shared/models/workout_alternative.dart';
 import '../../../shared/models/completed_set.dart';
 import '../../../shared/models/global_workout.dart';
 import '../data/global_workout_repository.dart';
+import '../../sync/services/progress_sync_service.dart';
 
 class WorkoutListScreen extends ConsumerStatefulWidget {
   final String planId;
@@ -420,6 +421,10 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     }
 
     await repository.saveCompletedSet(completedSet);
+
+    // Add to sync queue for upload to Firestore
+    final progressSyncService = ref.read(progressSyncServiceProvider);
+    await progressSyncService.enqueueCompletedSet(completedSet.id);
 
     setState(() {
       set['completed'] = true;

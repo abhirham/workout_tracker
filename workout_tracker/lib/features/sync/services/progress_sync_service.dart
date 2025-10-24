@@ -18,6 +18,27 @@ class ProgressSyncService {
 
   ProgressSyncService(this._firestore, this._database, this._authService);
 
+  /// Add a completed set to the sync queue for upload
+  Future<void> enqueueCompletedSet(String completedSetId) async {
+    try {
+      await _database.into(_database.syncQueue).insert(
+        SyncQueueCompanion.insert(
+          id: 'sync_${DateTime.now().millisecondsSinceEpoch}_$completedSetId',
+          entityType: 'completed_set',
+          entityId: completedSetId,
+          operation: 'create',
+          data: completedSetId, // Just store the ID, actual data is in completed_sets table
+          createdAt: DateTime.now(),
+          synced: const Value(false),
+        ),
+      );
+      debugPrint('[ProgressSyncService] Enqueued completed set: $completedSetId');
+    } catch (e) {
+      debugPrint('[ProgressSyncService] Error enqueueing completed set: $e');
+      // Don't rethrow - sync will happen on next auto-flush
+    }
+  }
+
   /// Upload completed sets from local DB to Firestore (batched)
   Future<void> uploadCompletedSets({int batchSize = 20}) async {
     try {
