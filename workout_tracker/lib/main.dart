@@ -10,10 +10,18 @@ import 'package:workout_tracker/firebase_options.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // Initialize Firebase with error handling
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    debugPrint('[Firebase] Successfully initialized');
+  } catch (e, stackTrace) {
+    debugPrint('[Firebase] Initialization failed: $e');
+    debugPrint('[Firebase] Stack trace: $stackTrace');
+    // Note: App will continue to run with limited functionality
+    // User will see login screen and can still attempt authentication
+  }
 
   // Create provider container
   final container = ProviderContainer();
