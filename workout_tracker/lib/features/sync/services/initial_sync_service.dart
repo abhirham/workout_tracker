@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'template_sync_service.dart';
+import 'progress_sync_service.dart';
 
 part 'initial_sync_service.g.dart';
 
@@ -10,9 +11,10 @@ part 'initial_sync_service.g.dart';
 /// This ensures the local database is populated with data from Firestore on first login
 class InitialSyncService {
   final TemplateSyncService _templateSyncService;
+  final ProgressSyncService _progressSyncService;
   static const String _syncCompletedKey = 'hasCompletedInitialSync';
 
-  InitialSyncService(this._templateSyncService);
+  InitialSyncService(this._templateSyncService, this._progressSyncService);
 
   /// Check if initial sync has been completed
   Future<bool> hasCompletedInitialSync() async {
@@ -27,7 +29,7 @@ class InitialSyncService {
   }
 
   /// Perform initial sync from Firestore
-  /// Downloads all global workouts and workout plans to local database
+  /// Downloads all global workouts, workout plans, and user progress to local database
   Future<void> performInitialSync() async {
     try {
       debugPrint('[InitialSyncService] Starting initial sync from Firestore...');
@@ -39,8 +41,14 @@ class InitialSyncService {
         return;
       }
 
-      // Sync all templates from Firestore
+      // 1. Sync all templates from Firestore (global workouts and workout plans)
+      debugPrint('[InitialSyncService] Syncing templates...');
       await _templateSyncService.syncAll();
+
+      // 2. Download user progress from Firestore (user profile and completed sets)
+      debugPrint('[InitialSyncService] Downloading user progress...');
+      await _progressSyncService.downloadUserProfile();
+      await _progressSyncService.downloadCompletedSets();
 
       // Mark sync as completed
       await _markSyncCompleted();
@@ -66,5 +74,6 @@ class InitialSyncService {
 @riverpod
 InitialSyncService initialSyncService(Ref ref) {
   final templateSyncService = ref.watch(templateSyncServiceProvider);
-  return InitialSyncService(templateSyncService);
+  final progressSyncService = ref.watch(progressSyncServiceProvider);
+  return InitialSyncService(templateSyncService, progressSyncService);
 }
