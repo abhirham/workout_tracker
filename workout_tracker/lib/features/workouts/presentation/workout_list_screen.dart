@@ -50,6 +50,10 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   Timer? _workoutTimer;
   int workoutTimerElapsed = 0; // Elapsed time for timer workouts
 
+  // Text controllers for weight and reps inputs (persisted across rebuilds)
+  final Map<int, TextEditingController> _weightControllers = {};
+  final Map<int, TextEditingController> _repsControllers = {};
+
   @override
   void initState() {
     super.initState();
@@ -234,6 +238,15 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   void dispose() {
     _timer?.cancel();
     _workoutTimer?.cancel();
+    // Dispose all text controllers
+    for (var controller in _weightControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in _repsControllers.values) {
+      controller.dispose();
+    }
+    _weightControllers.clear();
+    _repsControllers.clear();
     super.dispose();
   }
 
@@ -301,11 +314,25 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     return elapsed;
   }
 
+  void _clearTextControllers() {
+    // Dispose and clear all text controllers
+    for (var controller in _weightControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in _repsControllers.values) {
+      controller.dispose();
+    }
+    _weightControllers.clear();
+    _repsControllers.clear();
+  }
+
   void _resetWorkoutState() {
     // Cancel any running timer
     _timer?.cancel();
     isTimerRunning = false;
     timerSeconds = null;
+    // Clear text controllers when switching workout/alternative
+    _clearTextControllers();
     // Load progress from database (will reset if no progress exists for current alternative)
     _loadWorkoutProgress();
   }
@@ -644,6 +671,8 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                           selectedAlternativeId = null;
                           selectedAlternativeName = null;
                         });
+                        // Clear text controllers when switching workouts
+                        _clearTextControllers();
                         // Load progress for previous workout
                         _loadWorkoutProgress();
                       },
@@ -670,6 +699,8 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                               selectedAlternativeId = null;
                               selectedAlternativeName = null;
                             });
+                            // Clear text controllers when switching workouts
+                            _clearTextControllers();
                             // Load progress for next workout
                             _loadWorkoutProgress();
                           },
@@ -812,9 +843,24 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
       set['actualWeight'] = initialWeight;
     }
 
-    final weightController = TextEditingController(
-      text: initialWeight.toString(),
-    );
+    // Get or create weight controller for this set
+    if (!_weightControllers.containsKey(setIndex)) {
+      _weightControllers[setIndex] = TextEditingController(
+        text: initialWeight.toString(),
+      );
+    }
+    final weightController = _weightControllers[setIndex]!;
+
+    // Update controller text if the value in state changed (but preserve cursor)
+    final currentWeight = set['actualWeight'] as double?;
+    if (currentWeight != null && weightController.text != currentWeight.toString()) {
+      final selection = weightController.selection;
+      weightController.text = currentWeight.toString();
+      // Restore cursor position if valid
+      if (selection.isValid && selection.start <= weightController.text.length) {
+        weightController.selection = selection;
+      }
+    }
 
     // Get target reps from workout (set by admin, e.g., "12", "8-10", "AMRAP")
     final targetReps = workout['targetReps'] as String?;
@@ -826,9 +872,22 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
       defaultReps = _parseMinTargetReps(targetReps);
     }
 
-    final repsController = TextEditingController(
-      text: actualReps?.toString() ?? (defaultReps?.toString() ?? ''),
-    );
+    // Get or create reps controller for this set
+    final repsText = actualReps?.toString() ?? (defaultReps?.toString() ?? '');
+    if (!_repsControllers.containsKey(setIndex)) {
+      _repsControllers[setIndex] = TextEditingController(text: repsText);
+    }
+    final repsController = _repsControllers[setIndex]!;
+
+    // Update controller text if the value in state changed (but preserve cursor)
+    if (repsController.text != repsText && repsText.isNotEmpty) {
+      final selection = repsController.selection;
+      repsController.text = repsText;
+      // Restore cursor position if valid
+      if (selection.isValid && selection.start <= repsController.text.length) {
+        repsController.selection = selection;
+      }
+    }
 
     return InkWell(
       onTap: isCompleted
@@ -987,8 +1046,12 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                                                 0.0;
                                         final newValue =
                                             (currentValue - 2.5).clamp(0.0, 9999.0);
-                                        weightController.text =
-                                            newValue.toStringAsFixed(1);
+                                        final newText = newValue.toStringAsFixed(1);
+                                        // Update controller without losing cursor
+                                        weightController.value = weightController.value.copyWith(
+                                          text: newText,
+                                          selection: TextSelection.collapsed(offset: newText.length),
+                                        );
                                         setState(() {
                                           set['actualWeight'] = newValue;
                                           _updateIncompleteSetWeights(setIndex, newValue);
@@ -1011,8 +1074,12 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                                             double.tryParse(weightController.text) ??
                                                 0;
                                         final newValue = currentValue + 5;
-                                        weightController.text =
-                                            newValue.toStringAsFixed(1);
+                                        final newText = newValue.toStringAsFixed(1);
+                                        // Update controller without losing cursor
+                                        weightController.value = weightController.value.copyWith(
+                                          text: newText,
+                                          selection: TextSelection.collapsed(offset: newText.length),
+                                        );
                                         setState(() {
                                           set['actualWeight'] = newValue;
                                           _updateIncompleteSetWeights(setIndex, newValue);
@@ -1089,8 +1156,15 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                                             int.tryParse(repsController.text) ?? 0;
                                         final newValue =
                                             (currentValue - 1).clamp(0, 9999);
-                                        repsController.text = newValue.toString();
-                                        set['actualReps'] = newValue;
+                                        final newText = newValue.toString();
+                                        // Update controller without losing cursor
+                                        repsController.value = repsController.value.copyWith(
+                                          text: newText,
+                                          selection: TextSelection.collapsed(offset: newText.length),
+                                        );
+                                        setState(() {
+                                          set['actualReps'] = newValue;
+                                        });
                                       },
                                       child: Container(
                                         padding: const EdgeInsets.all(4),
@@ -1108,8 +1182,15 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                                         final currentValue =
                                             int.tryParse(repsController.text) ?? 0;
                                         final newValue = currentValue + 1;
-                                        repsController.text = newValue.toString();
-                                        set['actualReps'] = newValue;
+                                        final newText = newValue.toString();
+                                        // Update controller without losing cursor
+                                        repsController.value = repsController.value.copyWith(
+                                          text: newText,
+                                          selection: TextSelection.collapsed(offset: newText.length),
+                                        );
+                                        setState(() {
+                                          set['actualReps'] = newValue;
+                                        });
                                       },
                                       child: Container(
                                         padding: const EdgeInsets.all(4),

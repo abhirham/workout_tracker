@@ -403,6 +403,74 @@ class ProgressSyncService {
       rethrow;
     }
   }
+
+  /// Reset all progress data (local and Firestore)
+  /// DESTRUCTIVE: Deletes all completed sets and resets user profile
+  Future<void> resetAllProgress() async {
+    try {
+      final userId = _authService.currentUserId;
+      if (userId == null) {
+        throw Exception('User not authenticated');
+      }
+
+      debugPrint('[ProgressSyncService] Starting complete progress reset...');
+
+      // 1. Delete all completed sets from local database
+      final deletedLocal = await (_database.delete(_database.completedSets)
+            ..where((tbl) => tbl.userId.equals(userId)))
+          .go();
+      debugPrint('[ProgressSyncService] Deleted $deletedLocal sets from local DB');
+
+      // 2. Delete all completed sets from Firestore
+      final allSetsSnapshot = await _firestore
+          .collection('user_progress')
+          .doc(userId)
+          .collection('completed_sets')
+          .get();
+
+      // Delete in batches (Firestore batch limit is 500 operations)
+      final batchSize = 500;
+      for (var i = 0; i < allSetsSnapshot.docs.length; i += batchSize) {
+        final batch = _firestore.batch();
+        final batchDocs = allSetsSnapshot.docs.skip(i).take(batchSize);
+
+        for (final doc in batchDocs) {
+          batch.delete(doc.reference);
+        }
+
+        await batch.commit();
+        debugPrint('[ProgressSyncService] Deleted batch ${i ~/ batchSize + 1} from Firestore');
+      }
+
+      debugPrint('[ProgressSyncService] Deleted ${allSetsSnapshot.docs.length} sets from Firestore');
+
+      // 3. Reset user profile (keep user info but clear current plan/week/day)
+      await (_database.update(_database.userProfiles)
+            ..where((tbl) => tbl.userId.equals(userId)))
+          .write(
+        UserProfilesCompanion(
+          currentPlanId: const Value(null),
+          currentWeekNumber: const Value(null),
+          currentDayNumber: const Value(null),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+
+      // 4. Update Firestore user profile (use set with merge to handle missing documents)
+      await _firestore.collection('users').doc(userId).set({
+        'currentPlanId': null,
+        'currentWeekNumber': null,
+        'currentDayNumber': null,
+        'updatedAt': firestore.Timestamp.now(),
+      }, firestore.SetOptions(merge: true));
+
+      debugPrint('[ProgressSyncService] Progress reset complete');
+    } catch (e, stackTrace) {
+      debugPrint('[ProgressSyncService] Error resetting progress: $e');
+      debugPrint('Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
 }
 
 @riverpod

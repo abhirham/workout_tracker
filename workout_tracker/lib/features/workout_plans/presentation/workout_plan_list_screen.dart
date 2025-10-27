@@ -47,6 +47,8 @@ class WorkoutPlanListScreen extends ConsumerWidget {
             onSelected: (value) {
               if (value == 'signout') {
                 _showSignOutDialog(context, ref);
+              } else if (value == 'settings') {
+                context.push('/settings');
               }
             },
             itemBuilder: (context) => [
@@ -77,6 +79,16 @@ class WorkoutPlanListScreen extends ConsumerWidget {
                 ),
                 const PopupMenuDivider(),
               ],
+              const PopupMenuItem<String>(
+                value: 'settings',
+                child: Row(
+                  children: [
+                    Icon(Icons.settings),
+                    SizedBox(width: 12),
+                    Text('Settings'),
+                  ],
+                ),
+              ),
               const PopupMenuItem<String>(
                 value: 'signout',
                 child: Row(
