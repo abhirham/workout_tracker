@@ -31,14 +31,16 @@ class WorkoutListScreen extends ConsumerStatefulWidget {
   ConsumerState<WorkoutListScreen> createState() => _WorkoutListScreenState();
 }
 
-class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with WidgetsBindingObserver {
+class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen>
+    with WidgetsBindingObserver {
   // Workouts loaded from database
   List<Map<String, dynamic>> workouts = [];
   bool isLoading = true;
 
   int currentWorkoutIndex = 0;
   int? currentSetIndex; // Track which set is currently editable
-  int? timerSeconds; // Countdown timer (for rest between sets) - calculated value
+  int?
+  timerSeconds; // Countdown timer (for rest between sets) - calculated value
   bool isTimerRunning = false;
   Timer? _timer;
   int? _timerWorkoutIndex; // Track which workout the timer belongs to
@@ -48,7 +50,8 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
 
   // Timer-based workout state
   WorkoutType? currentWorkoutType; // Type of current workout (weight or timer)
-  int? workoutTimerSeconds; // Timer for timer-based workouts (e.g., plank duration) - calculated value
+  int?
+  workoutTimerSeconds; // Timer for timer-based workouts (e.g., plank duration) - calculated value
   bool isWorkoutTimerRunning = false;
   Timer? _workoutTimer;
   int workoutTimerElapsed = 0; // Elapsed time for timer workouts
@@ -91,19 +94,24 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
         'id': workoutWithSets.workout.id,
         'name': workoutWithSets.workout.name,
         'globalWorkoutId': workoutWithSets.workout.globalWorkoutId,
-        'type': globalWorkout?.type ?? WorkoutType.weight,  // Default to weight if not found
+        'type':
+            globalWorkout?.type ??
+            WorkoutType.weight, // Default to weight if not found
         'notes': workoutWithSets.workout.notes,
-        'targetReps': workoutWithSets.workout.targetReps,  // Target reps string from admin (e.g., "12", "8-10", "AMRAP")
+        'targetReps': workoutWithSets
+            .workout
+            .targetReps, // Target reps string from admin (e.g., "12", "8-10", "AMRAP")
         'timerSeconds': workoutWithSets.timerConfig?.durationSeconds ?? 45,
         'sets': workoutWithSets.sets.map((setTemplate) {
           return {
             'setNumber': setTemplate.setNumber,
             'suggestedReps': setTemplate.suggestedReps,
             'suggestedWeight': setTemplate.suggestedWeight,
-            'suggestedDuration': setTemplate.suggestedDuration,  // For timer workouts
+            'suggestedDuration':
+                setTemplate.suggestedDuration, // For timer workouts
             'actualReps': null,
             'actualWeight': null,
-            'actualDuration': null,  // For timer workouts
+            'actualDuration': null, // For timer workouts
             'completed': false,
           };
         }).toList(),
@@ -143,7 +151,9 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
     for (final completedSet in completedSets) {
       final setNumber = completedSet.setNumber;
       if (!latestSets.containsKey(setNumber) ||
-          completedSet.completedAt.isAfter(latestSets[setNumber]!.completedAt)) {
+          completedSet.completedAt.isAfter(
+            latestSets[setNumber]!.completedAt,
+          )) {
         latestSets[setNumber] = completedSet;
       }
     }
@@ -169,7 +179,9 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
           // No progress in this week - reset
           if (workoutType == WorkoutType.weight) {
             set['actualWeight'] = null;
-            set['actualReps'] = _parseMinTargetReps(currentWorkout['targetReps'] as String?);
+            set['actualReps'] = _parseMinTargetReps(
+              currentWorkout['targetReps'] as String?,
+            );
           } else {
             set['actualDuration'] = null;
           }
@@ -189,7 +201,9 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
           _timerWorkoutIndex != null &&
           _timerWorkoutIndex == currentWorkoutIndex &&
           _timerSetIndex != null) {
-        debugPrint('[RestTimer] Preserving timer set index $_timerSetIndex instead of first incomplete $currentSetIndex');
+        debugPrint(
+          '[RestTimer] Preserving timer set index $_timerSetIndex instead of first incomplete $currentSetIndex',
+        );
         currentSetIndex = _timerSetIndex;
       }
     });
@@ -200,14 +214,18 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
     }
   }
 
-  Future<void> _loadPreviousWeekWeights(String userId, String globalWorkoutId) async {
+  Future<void> _loadPreviousWeekWeights(
+    String userId,
+    String globalWorkoutId,
+  ) async {
     final repository = ref.read(completedSetRepositoryProvider);
     final currentWorkout = workouts[currentWorkoutIndex];
     final sets = currentWorkout['sets'] as List;
 
     // Determine if this is a phase boundary week
     // Phases are 4 weeks long: Week 1-4 (Phase 1), Week 5-8 (Phase 2), Week 9-12 (Phase 3), etc.
-    final isPhaseStart = (widget.weekNumber - 1) % 4 == 0 && widget.weekNumber > 1;
+    final isPhaseStart =
+        (widget.weekNumber - 1) % 4 == 0 && widget.weekNumber > 1;
 
     // For each uncompleted set, try to load the last weight from previous weeks
     for (final set in sets) {
@@ -305,12 +323,15 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
               _timerWorkoutIndex == currentWorkoutIndex &&
               _timerSetIndex != null &&
               _timerSetIndex == currentSetIndex) {
-            debugPrint('[RestTimer] Auto-advancing to next set (still on workout $_timerWorkoutIndex, set $_timerSetIndex)');
+            debugPrint(
+              '[RestTimer] Auto-advancing to next set (still on workout $_timerWorkoutIndex, set $_timerSetIndex)',
+            );
             _advanceToNextSet();
           } else {
-            debugPrint('[RestTimer] Not auto-advancing (timer from workout $_timerWorkoutIndex set $_timerSetIndex, now on workout $currentWorkoutIndex set $currentSetIndex)');
+            debugPrint(
+              '[RestTimer] Not auto-advancing (timer from workout $_timerWorkoutIndex set $_timerSetIndex, now on workout $currentWorkoutIndex set $currentSetIndex)',
+            );
           }
-
           _timerWorkoutIndex = null;
           _timerSetIndex = null;
         });
@@ -329,17 +350,22 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
     // Check workout timer (for timer-based exercises like plank)
     if (isWorkoutTimerRunning && _workoutTimerStartTime != null) {
       final elapsed = now.difference(_workoutTimerStartTime!).inSeconds;
-      final currentWorkout = workouts.isNotEmpty ? workouts[currentWorkoutIndex] : null;
+      final currentWorkout = workouts.isNotEmpty
+          ? workouts[currentWorkoutIndex]
+          : null;
 
       if (currentWorkout != null) {
         final sets = currentWorkout['sets'] as List;
-        final targetDuration = currentSetIndex != null && currentSetIndex! < sets.length
+        final targetDuration =
+            currentSetIndex != null && currentSetIndex! < sets.length
             ? (sets[currentSetIndex!]['suggestedDuration'] as int? ?? 60)
             : 60;
 
         if (elapsed >= targetDuration) {
           // Workout timer completed while backgrounded
-          debugPrint('[WorkoutTimer] Completed while backgrounded, auto-saving');
+          debugPrint(
+            '[WorkoutTimer] Completed while backgrounded, auto-saving',
+          );
           _workoutTimer?.cancel();
           setState(() {
             isWorkoutTimerRunning = false;
@@ -367,6 +393,18 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
   void _advanceToNextSet() {
     if (workouts.isEmpty || currentWorkoutIndex >= workouts.length) return;
 
+    // Only advance if we're on the workout where the timer was started
+    // This prevents advancing the wrong exercise if user navigated away
+    // Return if: timer index is null OR it's a different workout
+    debugPrint('og: $_timerWorkoutIndex, currently on $currentWorkoutIndex');
+    if (_timerWorkoutIndex == null ||
+        _timerWorkoutIndex != currentWorkoutIndex) {
+      debugPrint(
+        '[RestTimer] Not advancing - timer from workout $_timerWorkoutIndex, currently on $currentWorkoutIndex',
+      );
+      return;
+    }
+
     final currentWorkout = workouts[currentWorkoutIndex];
     final sets = currentWorkout['sets'] as List;
 
@@ -385,11 +423,15 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
       _restTimerEndTime = endTime;
       timerSeconds = 45;
       isTimerRunning = true;
-      _timerWorkoutIndex = currentWorkoutIndex; // Track which workout this timer belongs to
-      _timerSetIndex = currentSetIndex; // Track which set this timer was started for
+      _timerWorkoutIndex =
+          currentWorkoutIndex; // Track which workout this timer belongs to
+      _timerSetIndex =
+          currentSetIndex; // Track which set this timer was started for
     });
 
-    debugPrint('[RestTimer] Started for workout $currentWorkoutIndex, set $currentSetIndex, will complete at ${endTime.toIso8601String()}');
+    debugPrint(
+      '[RestTimer] Started for workout $currentWorkoutIndex, set $currentSetIndex, will complete at ${endTime.toIso8601String()}',
+    );
 
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -418,10 +460,14 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
               _timerWorkoutIndex == currentWorkoutIndex &&
               _timerSetIndex != null &&
               _timerSetIndex == currentSetIndex) {
-            debugPrint('[RestTimer] Auto-advancing to next set (still on workout $_timerWorkoutIndex, set $_timerSetIndex)');
+            debugPrint(
+              '[RestTimer] Auto-advancing to next set (still on workout $_timerWorkoutIndex, set $_timerSetIndex)',
+            );
             _advanceToNextSet();
           } else {
-            debugPrint('[RestTimer] Not auto-advancing (timer from workout $_timerWorkoutIndex set $_timerSetIndex, now on workout $currentWorkoutIndex set $currentSetIndex)');
+            debugPrint(
+              '[RestTimer] Not auto-advancing (timer from workout $_timerWorkoutIndex set $_timerSetIndex, now on workout $currentWorkoutIndex set $currentSetIndex)',
+            );
           }
 
           _timerWorkoutIndex = null;
@@ -441,7 +487,9 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
       workoutTimerElapsed = 0;
     });
 
-    debugPrint('[WorkoutTimer] Started at ${now.toIso8601String()}, duration: ${durationSeconds}s');
+    debugPrint(
+      '[WorkoutTimer] Started at ${now.toIso8601String()}, duration: ${durationSeconds}s',
+    );
 
     _workoutTimer?.cancel();
     _workoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -567,7 +615,9 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
       final isBodyweightExercise = suggestedWeight == null;
 
       // For bodyweight exercises, allow weight = 0. For weighted exercises, require weight > 0.
-      if (weight == null || (weight < 0) || (!isBodyweightExercise && weight == 0)) {
+      if (weight == null ||
+          (weight < 0) ||
+          (!isBodyweightExercise && weight == 0)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please enter a valid weight'),
@@ -596,7 +646,8 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
     const uuid = Uuid();
 
     // Determine the actual workout name (use alternative name if selected, otherwise original name)
-    final workoutName = selectedAlternativeName ?? (currentWorkout['name'] as String);
+    final workoutName =
+        selectedAlternativeName ?? (currentWorkout['name'] as String);
 
     // Handle timer vs weight workouts
     final CompletedSet completedSet;
@@ -608,13 +659,13 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
         weekId: widget.weekId,
         dayId: widget.dayId,
         workoutId: currentWorkout['id'] as String,
-        workoutName: workoutName,  // Actual exercise name performed
+        workoutName: workoutName, // Actual exercise name performed
         setNumber: set['setNumber'] as int,
         weight: null,
         reps: null,
         duration: set['actualDuration'] as int?,
         completedAt: DateTime.now(),
-        syncedAt: null,  // Not yet synced to Firestore
+        syncedAt: null, // Not yet synced to Firestore
         workoutAlternativeId: selectedAlternativeId, // null if original workout
       );
     } else {
@@ -625,13 +676,13 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
         weekId: widget.weekId,
         dayId: widget.dayId,
         workoutId: currentWorkout['id'] as String,
-        workoutName: workoutName,  // Actual exercise name performed
+        workoutName: workoutName, // Actual exercise name performed
         setNumber: set['setNumber'] as int,
         weight: set['actualWeight'] as double?,
         reps: set['actualReps'] as int?,
         duration: null,
         completedAt: DateTime.now(),
-        syncedAt: null,  // Not yet synced to Firestore
+        syncedAt: null, // Not yet synced to Firestore
         workoutAlternativeId: selectedAlternativeId, // null if original workout
       );
     }
@@ -750,13 +801,13 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
         body: isLoading
             ? const Center(child: CircularProgressIndicator())
             : workouts.isEmpty
-                ? Center(
-                    child: Text(
-                      'No workouts for this day',
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  )
-                : _buildWorkoutContent(),
+            ? Center(
+                child: Text(
+                  'No workouts for this day',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+              )
+            : _buildWorkoutContent(),
       ),
     );
   }
@@ -783,13 +834,16 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
               notificationService.cancelRestNotification();
 
               setState(() {
+                // Move to next set FIRST (before resetting timer indices)
+                // User is actively on this screen, so always advance
+                _advanceToNextSet();
+
+                // Then reset timer state
                 isTimerRunning = false;
                 timerSeconds = null;
                 _restTimerEndTime = null;
                 _timerWorkoutIndex = null;
                 _timerSetIndex = null;
-                // Move to next set (user is actively on this screen, so always advance)
-                _advanceToNextSet();
               });
             },
             child: Container(
@@ -807,21 +861,18 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
                   Text(
                     'Rest: ${timerSeconds}s',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onPrimaryContainer,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     '(tap to skip)',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onPrimaryContainer
-                              .withValues(alpha: 0.7),
-                        ),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                    ),
                   ),
                 ],
               ),
@@ -834,8 +885,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
           ),
         ),
         // Hide navigation buttons when keyboard is open
-        if (!isKeyboardOpen)
-          _buildNavigationButtons(context, isLastWorkout),
+        if (!isKeyboardOpen) _buildNavigationButtons(context, isLastWorkout),
       ],
     );
   }
@@ -902,7 +952,9 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
                             // Finish workout: cancel all timers and notifications
                             _timer?.cancel();
                             _workoutTimer?.cancel();
-                            final notificationService = ref.read(notificationServiceProvider);
+                            final notificationService = ref.read(
+                              notificationServiceProvider,
+                            );
                             notificationService.cancelRestNotification();
 
                             Navigator.of(context).pop();
@@ -937,11 +989,10 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
               Text(
                 'Next: $nextExerciseName',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.6),
-                    ),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
               ),
             ],
           ],
@@ -968,9 +1019,8 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
                     Expanded(
                       child: Text(
                         displayName,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w600),
                       ),
                     ),
                     OutlinedButton.icon(
@@ -991,11 +1041,10 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
                   Text(
                     workout['notes'] as String,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.6),
-                        ),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
                   ),
                 ],
                 const SizedBox(height: 12),
@@ -1013,8 +1062,8 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
                   child: Text(
                     '$completedSets/${sets.length} sets',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w500,
-                        ),
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ],
@@ -1032,10 +1081,11 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
   }
 
   Widget _buildSetRow(
-      BuildContext context,
-      Map<String, dynamic> workout,
-      Map<String, dynamic> set,
-      int setIndex) {
+    BuildContext context,
+    Map<String, dynamic> workout,
+    Map<String, dynamic> set,
+    int setIndex,
+  ) {
     final isCurrentSet = currentSetIndex == setIndex;
     final isCompleted = set['completed'] as bool;
     // Allow editing if current set and not timer running (including completed sets)
@@ -1133,381 +1183,429 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: isCurrentSet && !isCompleted
-              ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
+              ? Theme.of(
+                  context,
+                ).colorScheme.primaryContainer.withValues(alpha: 0.3)
               : null,
         ),
         child: Column(
-        children: [
-          Row(
-            children: [
-              // Set number
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: isCompleted
-                      ? Theme.of(context).colorScheme.primary
-                      : isCurrentSet
-                          ? Theme.of(context).colorScheme.secondaryContainer
-                          : Theme.of(context).colorScheme.surfaceContainerHighest,
-                  shape: BoxShape.circle,
+          children: [
+            Row(
+              children: [
+                // Set number
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: isCompleted
+                        ? Theme.of(context).colorScheme.primary
+                        : isCurrentSet
+                        ? Theme.of(context).colorScheme.secondaryContainer
+                        : Theme.of(context).colorScheme.surfaceContainerHighest,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: isCompleted
+                        ? Icon(
+                            Icons.check,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                            size: 20,
+                          )
+                        : Text(
+                            '${set['setNumber']}',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: isCurrentSet
+                                      ? Theme.of(
+                                          context,
+                                        ).colorScheme.onSecondaryContainer
+                                      : Theme.of(context).colorScheme.onSurface,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                  ),
                 ),
-                child: Center(
-                  child: isCompleted
-                      ? Icon(
-                          Icons.check,
-                          color: Theme.of(context).colorScheme.onPrimary,
-                          size: 20,
-                        )
-                      : Text(
-                          '${set['setNumber']}',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: isCurrentSet
-                                        ? Theme.of(context)
-                                            .colorScheme
-                                            .onSecondaryContainer
-                                        : Theme.of(context).colorScheme.onSurface,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                        ),
-                ),
-              ),
-              const SizedBox(width: 16),
+                const SizedBox(width: 16),
 
-              // Conditional UI based on workout type
+                // Conditional UI based on workout type
+                if (currentWorkoutType == WorkoutType.timer) ...[
+                  // Timer workout UI
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Duration',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.6),
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.outline,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.timer,
+                                size: 20,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                isWorkoutTimerRunning && isCurrentSet
+                                    ? '${workoutTimerSeconds}s'
+                                    : isCompleted
+                                    ? '${set['actualDuration'] ?? set['suggestedDuration']}s'
+                                    : 'Target: ${set['suggestedDuration']}s',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color:
+                                          isWorkoutTimerRunning && isCurrentSet
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.primary
+                                          : null,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else ...[
+                  // Weight workout UI
+                  // Weight input
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Weight (lbs)',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.6),
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        TextField(
+                          controller: weightController,
+                          enabled: isEnabled,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            contentPadding: const EdgeInsets.only(
+                              left: 12,
+                              right: 60,
+                              top: 8,
+                              bottom: 8,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            hintText: set['suggestedWeight']?.toString(),
+                            suffixIcon: isEnabled
+                                ? Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      InkWell(
+                                        onTap: () {
+                                          final currentValue =
+                                              double.tryParse(
+                                                weightController.text,
+                                              ) ??
+                                              0.0;
+                                          final newValue = (currentValue - 2.5)
+                                              .clamp(0.0, 9999.0);
+                                          final newText = newValue
+                                              .toStringAsFixed(1);
+                                          // Update controller without losing cursor
+                                          weightController.value =
+                                              weightController.value.copyWith(
+                                                text: newText,
+                                                selection:
+                                                    TextSelection.collapsed(
+                                                      offset: newText.length,
+                                                    ),
+                                              );
+                                          setState(() {
+                                            set['actualWeight'] = newValue;
+                                            _updateIncompleteSetWeights(
+                                              setIndex,
+                                              newValue,
+                                            );
+                                          });
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          child: Icon(
+                                            Icons.remove,
+                                            size: 16,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
+                                          ),
+                                        ),
+                                      ),
+                                      InkWell(
+                                        onTap: () {
+                                          final currentValue =
+                                              double.tryParse(
+                                                weightController.text,
+                                              ) ??
+                                              0;
+                                          final newValue = currentValue + 5;
+                                          final newText = newValue
+                                              .toStringAsFixed(1);
+                                          // Update controller without losing cursor
+                                          weightController.value =
+                                              weightController.value.copyWith(
+                                                text: newText,
+                                                selection:
+                                                    TextSelection.collapsed(
+                                                      offset: newText.length,
+                                                    ),
+                                              );
+                                          setState(() {
+                                            set['actualWeight'] = newValue;
+                                            _updateIncompleteSetWeights(
+                                              setIndex,
+                                              newValue,
+                                            );
+                                          });
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          child: Icon(
+                                            Icons.add,
+                                            size: 16,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : null,
+                          ),
+                          onChanged: (value) {
+                            final newWeight = double.tryParse(value);
+                            setState(() {
+                              set['actualWeight'] = newWeight;
+                              if (newWeight != null) {
+                                _updateIncompleteSetWeights(
+                                  setIndex,
+                                  newWeight,
+                                );
+                              }
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Reps input (actual reps completed, target shown above)
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          targetReps != null
+                              ? 'Reps (Target: $targetReps)'
+                              : 'Reps',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.6),
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        TextField(
+                          controller: repsController,
+                          enabled: isEnabled,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            contentPadding: const EdgeInsets.only(
+                              left: 12,
+                              right: 60,
+                              top: 8,
+                              bottom: 8,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            hintText: targetReps,
+                            suffixIcon: isEnabled
+                                ? Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      InkWell(
+                                        onTap: () {
+                                          final currentValue =
+                                              int.tryParse(
+                                                repsController.text,
+                                              ) ??
+                                              0;
+                                          final newValue = (currentValue - 1)
+                                              .clamp(0, 9999);
+                                          final newText = newValue.toString();
+                                          // Update controller without losing cursor
+                                          repsController.value = repsController
+                                              .value
+                                              .copyWith(
+                                                text: newText,
+                                                selection:
+                                                    TextSelection.collapsed(
+                                                      offset: newText.length,
+                                                    ),
+                                              );
+                                          setState(() {
+                                            set['actualReps'] = newValue;
+                                          });
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          child: Icon(
+                                            Icons.remove,
+                                            size: 16,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
+                                          ),
+                                        ),
+                                      ),
+                                      InkWell(
+                                        onTap: () {
+                                          final currentValue =
+                                              int.tryParse(
+                                                repsController.text,
+                                              ) ??
+                                              0;
+                                          final newValue = currentValue + 1;
+                                          final newText = newValue.toString();
+                                          // Update controller without losing cursor
+                                          repsController.value = repsController
+                                              .value
+                                              .copyWith(
+                                                text: newText,
+                                                selection:
+                                                    TextSelection.collapsed(
+                                                      offset: newText.length,
+                                                    ),
+                                              );
+                                          setState(() {
+                                            set['actualReps'] = newValue;
+                                          });
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          child: Icon(
+                                            Icons.add,
+                                            size: 16,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : null,
+                          ),
+                          onChanged: (value) {
+                            set['actualReps'] = int.tryParse(value);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            // Button row for current set
+            if (isCurrentSet) ...[
+              const SizedBox(height: 12),
               if (currentWorkoutType == WorkoutType.timer) ...[
-                // Timer workout UI
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Duration',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurface
-                                  .withValues(alpha: 0.6),
-                            ),
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: Theme.of(context).colorScheme.outline,
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.timer,
-                              size: 20,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              isWorkoutTimerRunning && isCurrentSet
-                                  ? '${workoutTimerSeconds}s'
-                                  : isCompleted
-                                      ? '${set['actualDuration'] ?? set['suggestedDuration']}s'
-                                      : 'Target: ${set['suggestedDuration']}s',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: isWorkoutTimerRunning && isCurrentSet
-                                        ? Theme.of(context).colorScheme.primary
-                                        : null,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ] else ...[
-                // Weight workout UI
-                // Weight input
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Weight (lbs)',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurface
-                                  .withValues(alpha: 0.6),
-                            ),
-                      ),
-                      const SizedBox(height: 4),
-                      TextField(
-                        controller: weightController,
-                        enabled: isEnabled,
-                        keyboardType:
-                            const TextInputType.numberWithOptions(decimal: true),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          contentPadding: const EdgeInsets.only(
-                            left: 12,
-                            right: 60,
-                            top: 8,
-                            bottom: 8,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          hintText: set['suggestedWeight']?.toString(),
-                          suffixIcon: isEnabled
-                              ? Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    InkWell(
-                                      onTap: () {
-                                        final currentValue =
-                                            double.tryParse(weightController.text) ??
-                                                0.0;
-                                        final newValue =
-                                            (currentValue - 2.5).clamp(0.0, 9999.0);
-                                        final newText = newValue.toStringAsFixed(1);
-                                        // Update controller without losing cursor
-                                        weightController.value = weightController.value.copyWith(
-                                          text: newText,
-                                          selection: TextSelection.collapsed(offset: newText.length),
-                                        );
-                                        setState(() {
-                                          set['actualWeight'] = newValue;
-                                          _updateIncompleteSetWeights(setIndex, newValue);
-                                        });
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.all(4),
-                                        child: Icon(
-                                          Icons.remove,
-                                          size: 16,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurface,
-                                        ),
-                                      ),
-                                    ),
-                                    InkWell(
-                                      onTap: () {
-                                        final currentValue =
-                                            double.tryParse(weightController.text) ??
-                                                0;
-                                        final newValue = currentValue + 5;
-                                        final newText = newValue.toStringAsFixed(1);
-                                        // Update controller without losing cursor
-                                        weightController.value = weightController.value.copyWith(
-                                          text: newText,
-                                          selection: TextSelection.collapsed(offset: newText.length),
-                                        );
-                                        setState(() {
-                                          set['actualWeight'] = newValue;
-                                          _updateIncompleteSetWeights(setIndex, newValue);
-                                        });
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.all(4),
-                                        child: Icon(
-                                          Icons.add,
-                                          size: 16,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurface,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : null,
-                        ),
-                        onChanged: (value) {
-                          final newWeight = double.tryParse(value);
-                          setState(() {
-                            set['actualWeight'] = newWeight;
-                            if (newWeight != null) {
-                              _updateIncompleteSetWeights(setIndex, newWeight);
+                // Timer workout buttons
+                if (!isCompleted && !isWorkoutTimerRunning)
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: isEnabled
+                          ? () {
+                              final duration = set['suggestedDuration'] as int?;
+                              if (duration != null) {
+                                _startWorkoutTimer(duration);
+                              }
                             }
-                          });
-                        },
-                      ),
-                    ],
+                          : null,
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Start Timer'),
+                    ),
+                  )
+                else if (isWorkoutTimerRunning)
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        final elapsed = _stopWorkoutTimer();
+                        setState(() {
+                          set['actualDuration'] = elapsed;
+                        });
+                        _saveSet(set, setIndex);
+                      },
+                      icon: const Icon(Icons.stop),
+                      label: const Text('Stop & Save'),
+                    ),
+                  )
+                else if (isCompleted)
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: isEnabled
+                          ? () {
+                              final duration = set['suggestedDuration'] as int?;
+                              if (duration != null) {
+                                _startWorkoutTimer(duration);
+                              }
+                            }
+                          : null,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Redo Timer'),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-
-                // Reps input (actual reps completed, target shown above)
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        targetReps != null ? 'Reps (Target: $targetReps)' : 'Reps',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurface
-                                  .withValues(alpha: 0.6),
-                            ),
-                      ),
-                      const SizedBox(height: 4),
-                      TextField(
-                        controller: repsController,
-                        enabled: isEnabled,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          isDense: true,
-                          contentPadding: const EdgeInsets.only(
-                            left: 12,
-                            right: 60,
-                            top: 8,
-                            bottom: 8,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          hintText: targetReps,
-                          suffixIcon: isEnabled
-                              ? Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    InkWell(
-                                      onTap: () {
-                                        final currentValue =
-                                            int.tryParse(repsController.text) ?? 0;
-                                        final newValue =
-                                            (currentValue - 1).clamp(0, 9999);
-                                        final newText = newValue.toString();
-                                        // Update controller without losing cursor
-                                        repsController.value = repsController.value.copyWith(
-                                          text: newText,
-                                          selection: TextSelection.collapsed(offset: newText.length),
-                                        );
-                                        setState(() {
-                                          set['actualReps'] = newValue;
-                                        });
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.all(4),
-                                        child: Icon(
-                                          Icons.remove,
-                                          size: 16,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurface,
-                                        ),
-                                      ),
-                                    ),
-                                    InkWell(
-                                      onTap: () {
-                                        final currentValue =
-                                            int.tryParse(repsController.text) ?? 0;
-                                        final newValue = currentValue + 1;
-                                        final newText = newValue.toString();
-                                        // Update controller without losing cursor
-                                        repsController.value = repsController.value.copyWith(
-                                          text: newText,
-                                          selection: TextSelection.collapsed(offset: newText.length),
-                                        );
-                                        setState(() {
-                                          set['actualReps'] = newValue;
-                                        });
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.all(4),
-                                        child: Icon(
-                                          Icons.add,
-                                          size: 16,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurface,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : null,
-                        ),
-                        onChanged: (value) {
-                          set['actualReps'] = int.tryParse(value);
-                        },
-                      ),
-                    ],
+              ] else ...[
+                // Weight workout save button
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: isEnabled ? () => _saveSet(set, setIndex) : null,
+                    child: const Text('Save'),
                   ),
                 ),
               ],
             ],
-          ),
-          // Button row for current set
-          if (isCurrentSet) ...[
-            const SizedBox(height: 12),
-            if (currentWorkoutType == WorkoutType.timer) ...[
-              // Timer workout buttons
-              if (!isCompleted && !isWorkoutTimerRunning)
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: isEnabled
-                        ? () {
-                            final duration = set['suggestedDuration'] as int?;
-                            if (duration != null) {
-                              _startWorkoutTimer(duration);
-                            }
-                          }
-                        : null,
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('Start Timer'),
-                  ),
-                )
-              else if (isWorkoutTimerRunning)
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      final elapsed = _stopWorkoutTimer();
-                      setState(() {
-                        set['actualDuration'] = elapsed;
-                      });
-                      _saveSet(set, setIndex);
-                    },
-                    icon: const Icon(Icons.stop),
-                    label: const Text('Stop & Save'),
-                  ),
-                )
-              else if (isCompleted)
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: isEnabled
-                        ? () {
-                            final duration = set['suggestedDuration'] as int?;
-                            if (duration != null) {
-                              _startWorkoutTimer(duration);
-                            }
-                          }
-                        : null,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Redo Timer'),
-                  ),
-                ),
-            ] else ...[
-              // Weight workout save button
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: isEnabled ? () => _saveSet(set, setIndex) : null,
-                  child: const Text('Save'),
-                ),
-              ),
-            ],
           ],
-        ],
         ),
       ),
     );
@@ -1538,7 +1636,6 @@ class _AlternativesBottomSheet extends StatefulWidget {
 }
 
 class _AlternativesBottomSheetState extends State<_AlternativesBottomSheet> {
-
   void _showCreateAlternativeDialog() {
     final controller = TextEditingController();
 
@@ -1585,9 +1682,9 @@ class _AlternativesBottomSheetState extends State<_AlternativesBottomSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text(
               'Select Workout',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
           const SizedBox(height: 16),
@@ -1601,14 +1698,16 @@ class _AlternativesBottomSheetState extends State<_AlternativesBottomSheet> {
             },
           ),
           // Alternative workouts
-          ...widget.alternatives.map((alt) => RadioListTile<String?>(
-                title: Text(alt.name),
-                value: alt.id,
-                groupValue: widget.selectedAlternativeId,
-                onChanged: (value) {
-                  widget.onAlternativeSelected(alt.id, alt.name);
-                },
-              )),
+          ...widget.alternatives.map(
+            (alt) => RadioListTile<String?>(
+              title: Text(alt.name),
+              value: alt.id,
+              groupValue: widget.selectedAlternativeId,
+              onChanged: (value) {
+                widget.onAlternativeSelected(alt.id, alt.name);
+              },
+            ),
+          ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.add_circle_outline),
