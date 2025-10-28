@@ -42,6 +42,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
   bool isTimerRunning = false;
   Timer? _timer;
   int? _timerWorkoutIndex; // Track which workout the timer belongs to
+  int? _timerSetIndex; // Track which set the timer was started for
   String? selectedAlternativeId; // null = original workout
   String? selectedAlternativeName; // Name of selected alternative
 
@@ -181,6 +182,16 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
       if (currentSetIndex == -1) {
         currentSetIndex = 0; // All completed, reset to first
       }
+
+      // If there's an active timer for this workout, preserve the original set index
+      // This prevents skipping sets when user navigates away and comes back
+      if (isTimerRunning &&
+          _timerWorkoutIndex != null &&
+          _timerWorkoutIndex == currentWorkoutIndex &&
+          _timerSetIndex != null) {
+        debugPrint('[RestTimer] Preserving timer set index $_timerSetIndex instead of first incomplete $currentSetIndex');
+        currentSetIndex = _timerSetIndex;
+      }
     });
 
     // Load last weights from previous weeks for pre-filling uncompleted sets (only for weight workouts)
@@ -288,15 +299,20 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
           timerSeconds = null;
           _restTimerEndTime = null;
 
-          // Only auto-advance if we're still on the same workout where timer was started
-          if (_timerWorkoutIndex != null && _timerWorkoutIndex == currentWorkoutIndex) {
-            debugPrint('[RestTimer] Auto-advancing to next set (still on workout $_timerWorkoutIndex)');
+          // Only auto-advance if we're still on the same workout AND set where timer was started
+          // This prevents skipping sets if user navigated away and came back while backgrounded
+          if (_timerWorkoutIndex != null &&
+              _timerWorkoutIndex == currentWorkoutIndex &&
+              _timerSetIndex != null &&
+              _timerSetIndex == currentSetIndex) {
+            debugPrint('[RestTimer] Auto-advancing to next set (still on workout $_timerWorkoutIndex, set $_timerSetIndex)');
             _advanceToNextSet();
           } else {
-            debugPrint('[RestTimer] Not auto-advancing (timer from workout $_timerWorkoutIndex, now on workout $currentWorkoutIndex)');
+            debugPrint('[RestTimer] Not auto-advancing (timer from workout $_timerWorkoutIndex set $_timerSetIndex, now on workout $currentWorkoutIndex set $currentSetIndex)');
           }
 
           _timerWorkoutIndex = null;
+          _timerSetIndex = null;
         });
         // Cancel notification since user returned
         notificationService.cancelRestNotification();
@@ -370,9 +386,10 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
       timerSeconds = 45;
       isTimerRunning = true;
       _timerWorkoutIndex = currentWorkoutIndex; // Track which workout this timer belongs to
+      _timerSetIndex = currentSetIndex; // Track which set this timer was started for
     });
 
-    debugPrint('[RestTimer] Started for workout $currentWorkoutIndex, will complete at ${endTime.toIso8601String()}');
+    debugPrint('[RestTimer] Started for workout $currentWorkoutIndex, set $currentSetIndex, will complete at ${endTime.toIso8601String()}');
 
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -395,15 +412,20 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
           final notificationService = ref.read(notificationServiceProvider);
           notificationService.showRestCompleteNotification();
 
-          // Only auto-advance if we're still on the same workout where timer was started
-          if (_timerWorkoutIndex != null && _timerWorkoutIndex == currentWorkoutIndex) {
-            debugPrint('[RestTimer] Auto-advancing to next set (still on workout $_timerWorkoutIndex)');
+          // Only auto-advance if we're still on the same workout AND set where timer was started
+          // This prevents skipping sets if user navigated away and came back
+          if (_timerWorkoutIndex != null &&
+              _timerWorkoutIndex == currentWorkoutIndex &&
+              _timerSetIndex != null &&
+              _timerSetIndex == currentSetIndex) {
+            debugPrint('[RestTimer] Auto-advancing to next set (still on workout $_timerWorkoutIndex, set $_timerSetIndex)');
             _advanceToNextSet();
           } else {
-            debugPrint('[RestTimer] Not auto-advancing (timer from workout $_timerWorkoutIndex, now on workout $currentWorkoutIndex)');
+            debugPrint('[RestTimer] Not auto-advancing (timer from workout $_timerWorkoutIndex set $_timerSetIndex, now on workout $currentWorkoutIndex set $currentSetIndex)');
           }
 
           _timerWorkoutIndex = null;
+          _timerSetIndex = null;
         }
       });
     });
@@ -487,6 +509,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
       timerSeconds = null;
       _restTimerEndTime = null;
       _timerWorkoutIndex = null;
+      _timerSetIndex = null;
       isWorkoutTimerRunning = false;
       workoutTimerSeconds = null;
       _workoutTimerStartTime = null;
@@ -764,6 +787,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
                 timerSeconds = null;
                 _restTimerEndTime = null;
                 _timerWorkoutIndex = null;
+                _timerSetIndex = null;
                 // Move to next set (user is actively on this screen, so always advance)
                 _advanceToNextSet();
               });
