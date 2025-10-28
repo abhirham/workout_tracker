@@ -11,6 +11,7 @@ import 'package:workout_tracker/features/weeks/presentation/week_selection_scree
 import 'package:workout_tracker/features/days/presentation/day_selection_screen.dart';
 import 'package:workout_tracker/features/workouts/presentation/workout_list_screen.dart';
 import 'package:workout_tracker/features/settings/presentation/settings_screen.dart';
+import 'package:workout_tracker/features/gym_card/presentation/gym_card_viewer_screen.dart';
 
 /// Helper class to convert a Stream into a ChangeNotifier for GoRouter
 class GoRouterRefreshStream extends ChangeNotifier {
@@ -87,6 +88,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         name: 'settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/gym-card',
+        name: 'gymCard',
+        builder: (context, state) => const GymCardViewerScreen(),
       ),
     GoRoute(
       path: '/plan/:planId/weeks',

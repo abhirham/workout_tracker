@@ -142,6 +142,14 @@ class WorkoutPlanListScreen extends ConsumerWidget {
           ),
         ),
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          context.push('/gym-card');
+        },
+        tooltip: 'Gym Card',
+        child: const Icon(Icons.qr_code),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 

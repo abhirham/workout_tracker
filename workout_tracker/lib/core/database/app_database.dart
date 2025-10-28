@@ -116,6 +116,8 @@ class UserProfiles extends Table {
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get syncLastTemplateSync => dateTime().nullable()();  // Timestamp of last template sync from Firestore
   DateTimeColumn get syncLastProgressSync => dateTime().nullable()();  // Timestamp of last progress sync with Firestore
+  TextColumn get gymCardPath => text().nullable()();  // Local file path to gym membership card image
+  DateTimeColumn get gymCardUpdatedAt => dateTime().nullable()();  // Timestamp when gym card was last updated
 
   @override
   Set<Column> get primaryKey => {userId};
@@ -196,7 +198,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration {
@@ -412,6 +414,15 @@ class AppDatabase extends _$AppDatabase {
           await customStatement('DELETE FROM weeks');
           await customStatement('DELETE FROM workout_plans');
           await customStatement('DELETE FROM global_workouts');
+        }
+        if (from < 13) {
+          // Add gym card fields to UserProfiles table
+          await customStatement(
+            'ALTER TABLE user_profiles ADD COLUMN gym_card_path TEXT',
+          );
+          await customStatement(
+            'ALTER TABLE user_profiles ADD COLUMN gym_card_updated_at INTEGER',
+          );
         }
       },
     );

@@ -67,6 +67,10 @@ dependencies:
   # UI
   google_fonts: ^6.2.1
 
+  # Image & Camera
+  image_picker: ^1.0.4
+  screen_brightness: ^1.0.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

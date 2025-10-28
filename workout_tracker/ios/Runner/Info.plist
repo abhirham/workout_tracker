@@ -56,5 +56,9 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>We need camera access to capture your gym membership card</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need photo library access to select your gym membership card</string>
 </dict>
 </plist>
