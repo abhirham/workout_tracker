@@ -1008,28 +1008,28 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
     }
 
     final initialWeight = getInitialWeight();
-    // Set the actual weight in the map if not already set
-    if (set['actualWeight'] == null) {
-      set['actualWeight'] = initialWeight;
-    }
 
     // Get or create weight controller for this set
     if (!_weightControllers.containsKey(setIndex)) {
+      // Only set initial weight when first creating the controller
+      final weightToUse = set['actualWeight'] as double? ?? initialWeight;
       _weightControllers[setIndex] = TextEditingController(
-        text: initialWeight.toString(),
+        text: weightToUse.toString(),
       );
+      // Set the actual weight in state only if not already set
+      if (set['actualWeight'] == null) {
+        set['actualWeight'] = weightToUse;
+      }
     }
     final weightController = _weightControllers[setIndex]!;
 
-    // Update controller text if the value in state changed (but preserve cursor)
+    // Update controller text only if the numeric value actually changed
+    // This prevents interfering with user's text editing (e.g., typing "30" vs "30.0")
     final currentWeight = set['actualWeight'] as double?;
-    if (currentWeight != null && weightController.text != currentWeight.toString()) {
-      final selection = weightController.selection;
-      weightController.text = currentWeight.toString();
-      // Restore cursor position if valid
-      if (selection.isValid && selection.start <= weightController.text.length) {
-        weightController.selection = selection;
-      }
+    final controllerWeight = double.tryParse(weightController.text);
+    // Only update if the numeric values differ (handles programmatic changes like increment buttons)
+    if (currentWeight != controllerWeight) {
+      weightController.text = currentWeight?.toString() ?? '';
     }
 
     // Get target reps from workout (set by admin, e.g., "12", "8-10", "AMRAP")
@@ -1038,25 +1038,29 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
 
     // Parse targetReps to get default minimum value
     int? defaultReps;
-    if (actualReps == null && targetReps != null && targetReps.isNotEmpty) {
+    if (targetReps != null && targetReps.isNotEmpty) {
       defaultReps = _parseMinTargetReps(targetReps);
     }
 
     // Get or create reps controller for this set
-    final repsText = actualReps?.toString() ?? (defaultReps?.toString() ?? '');
     if (!_repsControllers.containsKey(setIndex)) {
-      _repsControllers[setIndex] = TextEditingController(text: repsText);
+      // Only set initial reps when first creating the controller
+      final repsToUse = actualReps ?? defaultReps;
+      final initialRepsText = repsToUse?.toString() ?? '';
+      _repsControllers[setIndex] = TextEditingController(text: initialRepsText);
+      // Set the actual reps in state only if not already set
+      if (set['actualReps'] == null && repsToUse != null) {
+        set['actualReps'] = repsToUse;
+      }
     }
     final repsController = _repsControllers[setIndex]!;
 
-    // Update controller text if the value in state changed (but preserve cursor)
-    if (repsController.text != repsText && repsText.isNotEmpty) {
-      final selection = repsController.selection;
-      repsController.text = repsText;
-      // Restore cursor position if valid
-      if (selection.isValid && selection.start <= repsController.text.length) {
-        repsController.selection = selection;
-      }
+    // Update controller text only if the numeric value actually changed
+    // This prevents interfering with user's text editing
+    final controllerReps = int.tryParse(repsController.text);
+    // Only update if the numeric values differ (handles programmatic changes like increment buttons)
+    if (actualReps != controllerReps) {
+      repsController.text = actualReps?.toString() ?? '';
     }
 
     return InkWell(
