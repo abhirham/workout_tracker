@@ -679,40 +679,53 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.dayName),
-        centerTitle: true,
-        actions: !isLoading && workouts.isNotEmpty
-            ? [
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 16),
-                    child: Text(
-                      '${currentWorkoutIndex + 1}/${workouts.length}',
-                      style: Theme.of(context).textTheme.titleMedium,
+    return GestureDetector(
+      // Tap anywhere to hide keyboard
+      onTap: () {
+        // Unfocus any active text field to hide keyboard
+        FocusScope.of(context).unfocus();
+      },
+      // Allow taps to pass through to child widgets
+      behavior: HitTestBehavior.opaque,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(widget.dayName),
+          centerTitle: true,
+          actions: !isLoading && workouts.isNotEmpty
+              ? [
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 16),
+                      child: Text(
+                        '${currentWorkoutIndex + 1}/${workouts.length}',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                     ),
                   ),
-                ),
-              ]
-            : null,
+                ]
+              : null,
+        ),
+        body: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : workouts.isEmpty
+                ? Center(
+                    child: Text(
+                      'No workouts for this day',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  )
+                : _buildWorkoutContent(),
       ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : workouts.isEmpty
-              ? Center(
-                  child: Text(
-                    'No workouts for this day',
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                )
-              : _buildWorkoutContent(),
     );
   }
 
   Widget _buildWorkoutContent() {
     final currentWorkout = workouts[currentWorkoutIndex];
     final isLastWorkout = currentWorkoutIndex == workouts.length - 1;
+
+    // Check if keyboard is open
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    final isKeyboardOpen = keyboardHeight > 0;
 
     return Column(
       children: [
@@ -763,7 +776,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
                           color: Theme.of(context)
                               .colorScheme
                               .onPrimaryContainer
-                              .withOpacity(0.7),
+                              .withValues(alpha: 0.7),
                         ),
                   ),
                 ],
@@ -776,7 +789,9 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
             child: _buildWorkoutCard(context, currentWorkout),
           ),
         ),
-        _buildNavigationButtons(context, isLastWorkout),
+        // Hide navigation buttons when keyboard is open
+        if (!isKeyboardOpen)
+          _buildNavigationButtons(context, isLastWorkout),
       ],
     );
   }
@@ -794,7 +809,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
         color: Theme.of(context).colorScheme.surface,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, -2),
           ),
@@ -887,7 +902,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
                       color: Theme.of(context)
                           .colorScheme
                           .onSurface
-                          .withOpacity(0.6),
+                          .withValues(alpha: 0.6),
                     ),
               ),
             ],
@@ -941,7 +956,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
                           color: Theme.of(context)
                               .colorScheme
                               .onSurface
-                              .withOpacity(0.6),
+                              .withValues(alpha: 0.6),
                         ),
                   ),
                 ],
@@ -1080,7 +1095,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: isCurrentSet && !isCompleted
-              ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)
+              ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
               : null,
         ),
         child: Column(
@@ -1135,7 +1150,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
                               color: Theme.of(context)
                                   .colorScheme
                                   .onSurface
-                                  .withOpacity(0.6),
+                                  .withValues(alpha: 0.6),
                             ),
                       ),
                       const SizedBox(height: 4),
@@ -1188,7 +1203,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
                               color: Theme.of(context)
                                   .colorScheme
                                   .onSurface
-                                  .withOpacity(0.6),
+                                  .withValues(alpha: 0.6),
                             ),
                       ),
                       const SizedBox(height: 4),
@@ -1300,7 +1315,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
                               color: Theme.of(context)
                                   .colorScheme
                                   .onSurface
-                                  .withOpacity(0.6),
+                                  .withValues(alpha: 0.6),
                             ),
                       ),
                       const SizedBox(height: 4),
