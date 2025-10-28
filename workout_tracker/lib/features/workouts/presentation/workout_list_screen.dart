@@ -41,6 +41,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
   int? timerSeconds; // Countdown timer (for rest between sets) - calculated value
   bool isTimerRunning = false;
   Timer? _timer;
+  int? _timerWorkoutIndex; // Track which workout the timer belongs to
   String? selectedAlternativeId; // null = original workout
   String? selectedAlternativeName; // Name of selected alternative
 
@@ -279,14 +280,23 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
       final remaining = _restTimerEndTime!.difference(now).inSeconds;
 
       if (remaining <= 0) {
-        // Timer completed while backgrounded - auto advance
-        debugPrint('[RestTimer] Completed while backgrounded, advancing to next set');
+        // Timer completed while backgrounded
+        debugPrint('[RestTimer] Completed while backgrounded');
         _timer?.cancel();
         setState(() {
           isTimerRunning = false;
           timerSeconds = null;
           _restTimerEndTime = null;
-          _advanceToNextSet();
+
+          // Only auto-advance if we're still on the same workout where timer was started
+          if (_timerWorkoutIndex != null && _timerWorkoutIndex == currentWorkoutIndex) {
+            debugPrint('[RestTimer] Auto-advancing to next set (still on workout $_timerWorkoutIndex)');
+            _advanceToNextSet();
+          } else {
+            debugPrint('[RestTimer] Not auto-advancing (timer from workout $_timerWorkoutIndex, now on workout $currentWorkoutIndex)');
+          }
+
+          _timerWorkoutIndex = null;
         });
         // Cancel notification since user returned
         notificationService.cancelRestNotification();
@@ -359,9 +369,10 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
       _restTimerEndTime = endTime;
       timerSeconds = 45;
       isTimerRunning = true;
+      _timerWorkoutIndex = currentWorkoutIndex; // Track which workout this timer belongs to
     });
 
-    debugPrint('[RestTimer] Started, will complete at ${endTime.toIso8601String()}');
+    debugPrint('[RestTimer] Started for workout $currentWorkoutIndex, will complete at ${endTime.toIso8601String()}');
 
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -384,8 +395,15 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
           final notificationService = ref.read(notificationServiceProvider);
           notificationService.showRestCompleteNotification();
 
-          // Move to next set
-          _advanceToNextSet();
+          // Only auto-advance if we're still on the same workout where timer was started
+          if (_timerWorkoutIndex != null && _timerWorkoutIndex == currentWorkoutIndex) {
+            debugPrint('[RestTimer] Auto-advancing to next set (still on workout $_timerWorkoutIndex)');
+            _advanceToNextSet();
+          } else {
+            debugPrint('[RestTimer] Not auto-advancing (timer from workout $_timerWorkoutIndex, now on workout $currentWorkoutIndex)');
+          }
+
+          _timerWorkoutIndex = null;
         }
       });
     });
@@ -459,7 +477,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
   }
 
   void _resetWorkoutState() {
-    // Cancel any running timers
+    // Cancel any running timers (user is switching alternatives, start fresh)
     _timer?.cancel();
     _workoutTimer?.cancel();
 
@@ -468,6 +486,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
       isTimerRunning = false;
       timerSeconds = null;
       _restTimerEndTime = null;
+      _timerWorkoutIndex = null;
       isWorkoutTimerRunning = false;
       workoutTimerSeconds = null;
       _workoutTimerStartTime = null;
@@ -744,7 +763,8 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
                 isTimerRunning = false;
                 timerSeconds = null;
                 _restTimerEndTime = null;
-                // Move to next set
+                _timerWorkoutIndex = null;
+                // Move to next set (user is actively on this screen, so always advance)
                 _advanceToNextSet();
               });
             },
@@ -826,19 +846,14 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () {
-                        // Cancel any running timers
-                        _timer?.cancel();
+                        // Cancel only workout timer (exercise-specific like plank)
+                        // Keep rest timer running (it will persist across exercises)
                         _workoutTimer?.cancel();
-
-                        // Cancel notifications
-                        final notificationService = ref.read(notificationServiceProvider);
-                        notificationService.cancelRestNotification();
 
                         setState(() {
                           currentWorkoutIndex--;
-                          isTimerRunning = false;
-                          timerSeconds = null;
-                          _restTimerEndTime = null;
+                          // Keep rest timer state (isTimerRunning, timerSeconds, _restTimerEndTime)
+                          // Cancel only workout timer state
                           isWorkoutTimerRunning = false;
                           workoutTimerSeconds = null;
                           _workoutTimerStartTime = null;
@@ -860,23 +875,22 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with Widg
                   child: FilledButton(
                     onPressed: isLastWorkout
                         ? () {
-                            // TODO: Navigate back or show completion screen
-                            Navigator.of(context).pop();
-                          }
-                        : () {
-                            // Cancel any running timers
+                            // Finish workout: cancel all timers and notifications
                             _timer?.cancel();
                             _workoutTimer?.cancel();
-
-                            // Cancel notifications
                             final notificationService = ref.read(notificationServiceProvider);
                             notificationService.cancelRestNotification();
 
+                            Navigator.of(context).pop();
+                          }
+                        : () {
+                            // Next exercise: keep rest timer running, cancel only workout timer
+                            _workoutTimer?.cancel();
+
                             setState(() {
                               currentWorkoutIndex++;
-                              isTimerRunning = false;
-                              timerSeconds = null;
-                              _restTimerEndTime = null;
+                              // Keep rest timer state (isTimerRunning, timerSeconds, _restTimerEndTime)
+                              // Cancel only workout timer state
                               isWorkoutTimerRunning = false;
                               workoutTimerSeconds = null;
                               _workoutTimerStartTime = null;
