@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../core/services/user_service.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../shared/models/workout_alternative.dart';
 import '../../../shared/models/completed_set.dart';
 import '../../../shared/models/global_workout.dart';
@@ -30,14 +31,14 @@ class WorkoutListScreen extends ConsumerStatefulWidget {
   ConsumerState<WorkoutListScreen> createState() => _WorkoutListScreenState();
 }
 
-class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
+class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> with WidgetsBindingObserver {
   // Workouts loaded from database
   List<Map<String, dynamic>> workouts = [];
   bool isLoading = true;
 
   int currentWorkoutIndex = 0;
   int? currentSetIndex; // Track which set is currently editable
-  int? timerSeconds; // Countdown timer (for rest between sets)
+  int? timerSeconds; // Countdown timer (for rest between sets) - calculated value
   bool isTimerRunning = false;
   Timer? _timer;
   String? selectedAlternativeId; // null = original workout
@@ -45,10 +46,14 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
 
   // Timer-based workout state
   WorkoutType? currentWorkoutType; // Type of current workout (weight or timer)
-  int? workoutTimerSeconds; // Timer for timer-based workouts (e.g., plank duration)
+  int? workoutTimerSeconds; // Timer for timer-based workouts (e.g., plank duration) - calculated value
   bool isWorkoutTimerRunning = false;
   Timer? _workoutTimer;
   int workoutTimerElapsed = 0; // Elapsed time for timer workouts
+
+  // Timestamp-based timer tracking (for background resilience)
+  DateTime? _restTimerEndTime; // When rest timer should complete
+  DateTime? _workoutTimerStartTime; // When workout timer started
 
   // Text controllers for weight and reps inputs (persisted across rebuilds)
   final Map<int, TextEditingController> _weightControllers = {};
@@ -57,6 +62,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Load workouts from database first, then load progress
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadWorkouts();
@@ -236,8 +242,12 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     _workoutTimer?.cancel();
+    // Cancel any pending notifications
+    final notificationService = ref.read(notificationServiceProvider);
+    notificationService.cancelRestNotification();
     // Dispose all text controllers
     for (var controller in _weightControllers.values) {
       controller.dispose();
@@ -250,54 +260,174 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.resumed) {
+      _handleAppResumed();
+    }
+  }
+
+  /// Handle app resuming from background
+  void _handleAppResumed() {
+    final now = DateTime.now();
+    final notificationService = ref.read(notificationServiceProvider);
+
+    // Check rest timer (for weight workouts)
+    if (isTimerRunning && _restTimerEndTime != null) {
+      final remaining = _restTimerEndTime!.difference(now).inSeconds;
+
+      if (remaining <= 0) {
+        // Timer completed while backgrounded - auto advance
+        debugPrint('[RestTimer] Completed while backgrounded, advancing to next set');
+        _timer?.cancel();
+        setState(() {
+          isTimerRunning = false;
+          timerSeconds = null;
+          _restTimerEndTime = null;
+          _advanceToNextSet();
+        });
+        // Cancel notification since user returned
+        notificationService.cancelRestNotification();
+      } else {
+        // Update remaining time
+        setState(() {
+          timerSeconds = remaining;
+        });
+        // Cancel notification since user returned before completion
+        notificationService.cancelRestNotification();
+      }
+    }
+
+    // Check workout timer (for timer-based exercises like plank)
+    if (isWorkoutTimerRunning && _workoutTimerStartTime != null) {
+      final elapsed = now.difference(_workoutTimerStartTime!).inSeconds;
+      final currentWorkout = workouts.isNotEmpty ? workouts[currentWorkoutIndex] : null;
+
+      if (currentWorkout != null) {
+        final sets = currentWorkout['sets'] as List;
+        final targetDuration = currentSetIndex != null && currentSetIndex! < sets.length
+            ? (sets[currentSetIndex!]['suggestedDuration'] as int? ?? 60)
+            : 60;
+
+        if (elapsed >= targetDuration) {
+          // Workout timer completed while backgrounded
+          debugPrint('[WorkoutTimer] Completed while backgrounded, auto-saving');
+          _workoutTimer?.cancel();
+          setState(() {
+            isWorkoutTimerRunning = false;
+            workoutTimerElapsed = elapsed;
+            workoutTimerSeconds = 0;
+          });
+          // Auto-save the set
+          if (currentSetIndex != null && currentSetIndex! < sets.length) {
+            final set = sets[currentSetIndex!];
+            set['actualDuration'] = elapsed;
+            _saveSet(set, currentSetIndex!);
+          }
+        } else {
+          // Update elapsed time
+          setState(() {
+            workoutTimerElapsed = elapsed;
+            workoutTimerSeconds = targetDuration - elapsed;
+          });
+        }
+      }
+    }
+  }
+
+  /// Advance to the next set (helper method)
+  void _advanceToNextSet() {
+    if (workouts.isEmpty || currentWorkoutIndex >= workouts.length) return;
+
+    final currentWorkout = workouts[currentWorkoutIndex];
+    final sets = currentWorkout['sets'] as List;
+
+    if (currentSetIndex != null && currentSetIndex! < sets.length - 1) {
+      setState(() {
+        currentSetIndex = currentSetIndex! + 1;
+      });
+    }
+  }
+
   void _startTimer() {
+    final now = DateTime.now();
+    final endTime = now.add(const Duration(seconds: 45));
+
     setState(() {
+      _restTimerEndTime = endTime;
       timerSeconds = 45;
       isTimerRunning = true;
     });
 
+    debugPrint('[RestTimer] Started, will complete at ${endTime.toIso8601String()}');
+
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      final now = DateTime.now();
+      final remaining = _restTimerEndTime!.difference(now).inSeconds;
+
       setState(() {
-        if (timerSeconds! > 0) {
-          timerSeconds = timerSeconds! - 1;
+        if (remaining > 0) {
+          timerSeconds = remaining;
         } else {
+          // Timer completed
           timer.cancel();
           isTimerRunning = false;
-          // Move to next set
-          final currentWorkout = workouts[currentWorkoutIndex];
-          final sets = currentWorkout['sets'] as List;
-          if (currentSetIndex! < sets.length - 1) {
-            currentSetIndex = currentSetIndex! + 1;
-          }
           timerSeconds = null;
+          _restTimerEndTime = null;
+
+          debugPrint('[RestTimer] Completed, showing notification');
+
+          // Show notification
+          final notificationService = ref.read(notificationServiceProvider);
+          notificationService.showRestCompleteNotification();
+
+          // Move to next set
+          _advanceToNextSet();
         }
       });
     });
   }
 
   void _startWorkoutTimer(int durationSeconds) {
+    final now = DateTime.now();
+
     setState(() {
+      _workoutTimerStartTime = now;
       workoutTimerSeconds = durationSeconds;
       isWorkoutTimerRunning = true;
       workoutTimerElapsed = 0;
     });
 
+    debugPrint('[WorkoutTimer] Started at ${now.toIso8601String()}, duration: ${durationSeconds}s');
+
     _workoutTimer?.cancel();
     _workoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      final now = DateTime.now();
+      final elapsed = now.difference(_workoutTimerStartTime!).inSeconds;
+      final remaining = durationSeconds - elapsed;
+
       setState(() {
-        if (workoutTimerSeconds! > 0) {
-          workoutTimerSeconds = workoutTimerSeconds! - 1;
-          workoutTimerElapsed++;
+        workoutTimerElapsed = elapsed;
+        if (remaining > 0) {
+          workoutTimerSeconds = remaining;
         } else {
+          // Timer completed
           timer.cancel();
           isWorkoutTimerRunning = false;
+          workoutTimerSeconds = 0;
+          _workoutTimerStartTime = null;
+
+          debugPrint('[WorkoutTimer] Completed, elapsed: ${elapsed}s');
+
           // Auto-save the set with elapsed time
           final currentWorkout = workouts[currentWorkoutIndex];
           final sets = currentWorkout['sets'] as List;
           if (currentSetIndex != null && currentSetIndex! < sets.length) {
             final set = sets[currentSetIndex!];
-            set['actualDuration'] = workoutTimerElapsed;
+            set['actualDuration'] = elapsed;
             _saveSet(set, currentSetIndex!);
           }
         }
@@ -310,7 +440,9 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
     final elapsed = workoutTimerElapsed;
     setState(() {
       isWorkoutTimerRunning = false;
+      _workoutTimerStartTime = null;
     });
+    debugPrint('[WorkoutTimer] Stopped manually, elapsed: ${elapsed}s');
     return elapsed;
   }
 
@@ -327,12 +459,27 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
   }
 
   void _resetWorkoutState() {
-    // Cancel any running timer
+    // Cancel any running timers
     _timer?.cancel();
-    isTimerRunning = false;
-    timerSeconds = null;
+    _workoutTimer?.cancel();
+
+    // Reset timer state
+    setState(() {
+      isTimerRunning = false;
+      timerSeconds = null;
+      _restTimerEndTime = null;
+      isWorkoutTimerRunning = false;
+      workoutTimerSeconds = null;
+      _workoutTimerStartTime = null;
+    });
+
+    // Cancel notifications
+    final notificationService = ref.read(notificationServiceProvider);
+    notificationService.cancelRestNotification();
+
     // Clear text controllers when switching workout/alternative
     _clearTextControllers();
+
     // Load progress from database (will reset if no progress exists for current alternative)
     _loadWorkoutProgress();
   }
@@ -574,15 +721,18 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
             onTap: () {
               // Skip timer
               _timer?.cancel();
+              debugPrint('[RestTimer] Skipped by user');
+
+              // Cancel notification
+              final notificationService = ref.read(notificationServiceProvider);
+              notificationService.cancelRestNotification();
+
               setState(() {
                 isTimerRunning = false;
                 timerSeconds = null;
+                _restTimerEndTime = null;
                 // Move to next set
-                final currentWorkout = workouts[currentWorkoutIndex];
-                final sets = currentWorkout['sets'] as List;
-                if (currentSetIndex! < sets.length - 1) {
-                  currentSetIndex = currentSetIndex! + 1;
-                }
+                _advanceToNextSet();
               });
             },
             child: Container(
@@ -661,12 +811,22 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () {
+                        // Cancel any running timers
+                        _timer?.cancel();
+                        _workoutTimer?.cancel();
+
+                        // Cancel notifications
+                        final notificationService = ref.read(notificationServiceProvider);
+                        notificationService.cancelRestNotification();
+
                         setState(() {
                           currentWorkoutIndex--;
-                          // Cancel any running timer
-                          _timer?.cancel();
                           isTimerRunning = false;
                           timerSeconds = null;
+                          _restTimerEndTime = null;
+                          isWorkoutTimerRunning = false;
+                          workoutTimerSeconds = null;
+                          _workoutTimerStartTime = null;
                           // Clear alternative selection when navigating to different workout
                           selectedAlternativeId = null;
                           selectedAlternativeName = null;
@@ -689,12 +849,22 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen> {
                             Navigator.of(context).pop();
                           }
                         : () {
+                            // Cancel any running timers
+                            _timer?.cancel();
+                            _workoutTimer?.cancel();
+
+                            // Cancel notifications
+                            final notificationService = ref.read(notificationServiceProvider);
+                            notificationService.cancelRestNotification();
+
                             setState(() {
                               currentWorkoutIndex++;
-                              // Cancel any running timer
-                              _timer?.cancel();
                               isTimerRunning = false;
                               timerSeconds = null;
+                              _restTimerEndTime = null;
+                              isWorkoutTimerRunning = false;
+                              workoutTimerSeconds = null;
+                              _workoutTimerStartTime = null;
                               // Clear alternative selection when navigating to different workout
                               selectedAlternativeId = null;
                               selectedAlternativeName = null;

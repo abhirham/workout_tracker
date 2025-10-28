@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Notification permissions for Android 13+ (API 33+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Vibration permission for notification vibration -->
+    <uses-permission android:name="android.permission.VIBRATE"/>
+
     <application
         android:label="workout_tracker"
         android:name="${applicationName}"

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:workout_tracker/core/router/app_router.dart';
+import 'package:workout_tracker/core/services/notification_service.dart';
 import 'package:workout_tracker/features/sync/services/auth_service.dart';
 import 'package:workout_tracker/features/sync/services/sync_queue_processor.dart';
 import 'package:workout_tracker/firebase_options.dart';
@@ -21,6 +22,25 @@ void main() async {
     debugPrint('[Firebase] Stack trace: $stackTrace');
     // Note: App will continue to run with limited functionality
     // User will see login screen and can still attempt authentication
+  }
+
+  // Initialize notification service
+  final notificationService = NotificationService();
+  try {
+    await notificationService.initialize();
+    debugPrint('[Notifications] Successfully initialized');
+
+    // Request notification permissions (graceful degradation if denied)
+    final permissionsGranted = await notificationService.requestPermissions();
+    if (permissionsGranted) {
+      debugPrint('[Notifications] Permissions granted');
+    } else {
+      debugPrint('[Notifications] Permissions denied - notifications will not be shown');
+    }
+  } catch (e, stackTrace) {
+    debugPrint('[Notifications] Initialization failed: $e');
+    debugPrint('[Notifications] Stack trace: $stackTrace');
+    // App will continue to run without notifications
   }
 
   // Create provider container
