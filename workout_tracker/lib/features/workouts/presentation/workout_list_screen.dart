@@ -10,6 +10,8 @@ import '../../../shared/models/completed_set.dart';
 import '../../../shared/models/global_workout.dart';
 import '../data/global_workout_repository.dart';
 import '../../sync/services/progress_sync_service.dart';
+import '../../settings/presentation/widgets/rest_timer_settings_bottom_sheet.dart';
+import '../../settings/data/user_preferences_repository.dart';
 
 class WorkoutListScreen extends ConsumerStatefulWidget {
   final String planId;
@@ -64,6 +66,9 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen>
   final Map<int, TextEditingController> _weightControllers = {};
   final Map<int, TextEditingController> _repsControllers = {};
 
+  // User's preferred rest timer duration (loaded from database)
+  int _restTimerDuration = 45; // Default fallback value
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +76,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen>
     // Load workouts from database first, then load progress
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadWorkouts();
+      _loadRestTimerPreference();
     });
   }
 
@@ -126,6 +132,23 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen>
     // Load progress after workouts are loaded
     if (workouts.isNotEmpty) {
       await _loadWorkoutProgress();
+    }
+  }
+
+  Future<void> _loadRestTimerPreference() async {
+    try {
+      final userService = ref.read(userServiceProvider);
+      final userId = userService.getCurrentUserIdOrThrow();
+      final repository = ref.read(userPreferencesRepositoryProvider);
+
+      final duration = await repository.getDefaultRestTimer(userId);
+
+      setState(() {
+        _restTimerDuration = duration;
+      });
+    } catch (e) {
+      debugPrint('[RestTimer] Failed to load preference: $e');
+      // Keep default value (45 seconds) on error
     }
   }
 
@@ -431,11 +454,11 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen>
 
   void _startTimer() {
     final now = DateTime.now();
-    final endTime = now.add(const Duration(seconds: 45));
+    final endTime = now.add(Duration(seconds: _restTimerDuration));
 
     setState(() {
       _restTimerEndTime = endTime;
-      timerSeconds = 45;
+      timerSeconds = _restTimerDuration;
       isTimerRunning = true;
       _timerWorkoutIndex =
           currentWorkoutIndex; // Track which workout this timer belongs to
@@ -444,7 +467,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen>
     });
 
     debugPrint(
-      '[RestTimer] Started for workout $currentWorkoutIndex, set $currentSetIndex, will complete at ${endTime.toIso8601String()}',
+      '[RestTimer] Started for workout $currentWorkoutIndex, set $currentSetIndex, duration ${_restTimerDuration}s, will complete at ${endTime.toIso8601String()}',
     );
 
     _timer?.cancel();
@@ -801,6 +824,18 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen>
           centerTitle: true,
           actions: !isLoading && workouts.isNotEmpty
               ? [
+                  // Gear icon for rest timer settings
+                  IconButton(
+                    icon: const Icon(Icons.settings),
+                    tooltip: 'Rest Timer Settings',
+                    onPressed: () {
+                      showRestTimerSettings(context).then((_) {
+                        // Reload preference after settings are changed
+                        _loadRestTimerPreference();
+                      });
+                    },
+                  ),
+                  // Exercise counter
                   Center(
                     child: Padding(
                       padding: const EdgeInsets.only(right: 16),

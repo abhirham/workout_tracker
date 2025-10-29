@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../sync/services/progress_sync_service.dart';
 import '../../sync/services/auth_service.dart';
+import '../../../core/services/user_service.dart';
+import '../data/user_preferences_repository.dart';
+import 'widgets/rest_timer_settings_bottom_sheet.dart';
 
 /// Settings screen for app configuration and data management
 class SettingsScreen extends ConsumerWidget {
@@ -33,6 +36,19 @@ class SettingsScreen extends ConsumerWidget {
                     subtitle: const Text('Sign out of your account'),
                     onTap: () => _handleSignOut(context, ref),
                   ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Workout Preferences Section
+            _buildSectionHeader(theme, 'Workout Preferences'),
+            const SizedBox(height: 8),
+            Card(
+              child: Column(
+                children: [
+                  _buildRestTimerTile(context, ref),
                 ],
               ),
             ),
@@ -98,6 +114,54 @@ class SettingsScreen extends ConsumerWidget {
           fontWeight: FontWeight.bold,
           letterSpacing: 1.2,
         ),
+      ),
+    );
+  }
+
+  Widget _buildRestTimerTile(BuildContext context, WidgetRef ref) {
+    final userService = ref.watch(userServiceProvider);
+    final userId = userService.getCurrentUserIdOrThrow();
+    final restTimerPreference = ref.watch(restTimerPreferenceProvider(userId));
+
+    return restTimerPreference.when(
+      data: (duration) {
+        // Format duration for display
+        String durationText;
+        if (duration < 60) {
+          durationText = '${duration}s';
+        } else if (duration == 60) {
+          durationText = '1 min';
+        } else if (duration == 90) {
+          durationText = '1.5 min';
+        } else if (duration == 120) {
+          durationText = '2 min';
+        } else {
+          durationText = '${duration}s';
+        }
+
+        return ListTile(
+          leading: const Icon(Icons.timer),
+          title: const Text('Rest Timer Duration'),
+          subtitle: Text('Time to rest between sets: $durationText'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            showRestTimerSettings(context);
+          },
+        );
+      },
+      loading: () => const ListTile(
+        leading: Icon(Icons.timer),
+        title: Text('Rest Timer Duration'),
+        subtitle: Text('Loading...'),
+      ),
+      error: (error, stack) => ListTile(
+        leading: const Icon(Icons.timer),
+        title: const Text('Rest Timer Duration'),
+        subtitle: Text('Error loading: ${error.toString()}'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () {
+          showRestTimerSettings(context);
+        },
       ),
     );
   }

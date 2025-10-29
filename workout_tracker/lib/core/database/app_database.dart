@@ -118,6 +118,7 @@ class UserProfiles extends Table {
   DateTimeColumn get syncLastProgressSync => dateTime().nullable()();  // Timestamp of last progress sync with Firestore
   TextColumn get gymCardPath => text().nullable()();  // Local file path to gym membership card image
   DateTimeColumn get gymCardUpdatedAt => dateTime().nullable()();  // Timestamp when gym card was last updated
+  IntColumn get defaultRestTimerSeconds => integer().withDefault(const Constant(45))();  // User's preferred rest timer duration (device-only setting)
 
   @override
   Set<Column> get primaryKey => {userId};
@@ -198,7 +199,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration {
@@ -422,6 +423,13 @@ class AppDatabase extends _$AppDatabase {
           );
           await customStatement(
             'ALTER TABLE user_profiles ADD COLUMN gym_card_updated_at INTEGER',
+          );
+        }
+        if (from < 14) {
+          // Add default rest timer duration preference to UserProfiles table
+          // Default value: 45 seconds (maintains current behavior)
+          await customStatement(
+            'ALTER TABLE user_profiles ADD COLUMN default_rest_timer_seconds INTEGER NOT NULL DEFAULT 45',
           );
         }
       },
