@@ -189,10 +189,12 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen>
         }
       }
 
-      // Find the first uncompleted set, or default to 0
+      // Find the first uncompleted set
+      // If all sets are completed, don't auto-select any set
+      // User must tap checkbox to edit a completed set
       currentSetIndex = sets.indexWhere((set) => set['completed'] == false);
       if (currentSetIndex == -1) {
-        currentSetIndex = 0; // All completed, reset to first
+        currentSetIndex = null; // All completed, no set is active
       }
 
       // If there's an active timer for this workout, preserve the original set index
@@ -389,7 +391,7 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen>
     }
   }
 
-  /// Advance to the next set (helper method)
+  /// Advance to the next uncompleted set (helper method)
   void _advanceToNextSet() {
     if (workouts.isEmpty || currentWorkoutIndex >= workouts.length) return;
 
@@ -409,8 +411,20 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen>
     final sets = currentWorkout['sets'] as List;
 
     if (currentSetIndex != null && currentSetIndex! < sets.length - 1) {
+      // Find the next uncompleted set starting from current + 1
+      final nextUncompletedIndex = sets
+          .skip(currentSetIndex! + 1)
+          .toList()
+          .indexWhere((set) => set['completed'] == false);
+
       setState(() {
-        currentSetIndex = currentSetIndex! + 1;
+        if (nextUncompletedIndex != -1) {
+          // Found an uncompleted set
+          currentSetIndex = currentSetIndex! + 1 + nextUncompletedIndex;
+        } else {
+          // All remaining sets are completed, don't select any
+          currentSetIndex = null;
+        }
       });
     }
   }
@@ -699,10 +713,11 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen>
       // Start rest timer if not the last set (for both weight and timer workouts)
       final sets = currentWorkout['sets'] as List;
       if (setIndex < sets.length - 1) {
-        _startTimer(); // Rest timer for all workout types
+        _startTimer(); // Rest timer will auto-advance to next uncompleted set
       } else {
-        // Last set - move to next set index without timer
-        currentSetIndex = setIndex + 1;
+        // Last set completed - no set should be active
+        // User must tap checkbox to edit any completed set
+        currentSetIndex = null;
       }
     });
   }
@@ -1166,34 +1181,36 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen>
       repsController.text = actualReps?.toString() ?? '';
     }
 
-    return InkWell(
-      onTap: isCompleted
-          ? () {
-              // Make completed set editable (keep it completed, just make it active)
-              setState(() {
-                currentSetIndex = setIndex;
-                // Cancel any running timer
-                _timer?.cancel();
-                isTimerRunning = false;
-                timerSeconds = null;
-              });
-            }
-          : null,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isCurrentSet && !isCompleted
-              ? Theme.of(
-                  context,
-                ).colorScheme.primaryContainer.withValues(alpha: 0.3)
-              : null,
-        ),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                // Set number
-                Container(
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: isCurrentSet && !isCompleted
+            ? Theme.of(
+                context,
+              ).colorScheme.primaryContainer.withValues(alpha: 0.3)
+            : null,
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              // Set number checkbox
+              // IMPORTANT: For completed sets, this is the ONLY way to put them in edit mode
+              // Tapping the checkbox makes a completed set editable so users can modify it
+              InkWell(
+                onTap: isCompleted
+                    ? () {
+                        // Make completed set editable by making it the current set
+                        setState(() {
+                          currentSetIndex = setIndex;
+                          // Cancel any running timer
+                          _timer?.cancel();
+                          isTimerRunning = false;
+                          timerSeconds = null;
+                        });
+                      }
+                    : null,
+                child: Container(
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
@@ -1225,66 +1242,62 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen>
                           ),
                   ),
                 ),
-                const SizedBox(width: 16),
+              ),
+              const SizedBox(width: 16),
 
-                // Conditional UI based on workout type
-                if (currentWorkoutType == WorkoutType.timer) ...[
-                  // Timer workout UI
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Duration',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: 0.6),
-                              ),
+              // Conditional UI based on workout type
+              if (currentWorkoutType == WorkoutType.timer) ...[
+                // Timer workout UI
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Duration',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.6),
                         ),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: Theme.of(context).colorScheme.outline,
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.outline,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.timer,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.primary,
                             ),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.timer,
-                                size: 20,
-                                color: Theme.of(context).colorScheme.primary,
+                            const SizedBox(width: 8),
+                            Text(
+                              isWorkoutTimerRunning && isCurrentSet
+                                  ? '${workoutTimerSeconds}s'
+                                  : isCompleted
+                                  ? '${set['actualDuration'] ?? set['suggestedDuration']}s'
+                                  : 'Target: ${set['suggestedDuration']}s',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: isWorkoutTimerRunning && isCurrentSet
+                                    ? Theme.of(context).colorScheme.primary
+                                    : null,
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                isWorkoutTimerRunning && isCurrentSet
-                                    ? '${workoutTimerSeconds}s'
-                                    : isCompleted
-                                    ? '${set['actualDuration'] ?? set['suggestedDuration']}s'
-                                    : 'Target: ${set['suggestedDuration']}s',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color:
-                                          isWorkoutTimerRunning && isCurrentSet
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.primary
-                                          : null,
-                                    ),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ] else ...[
+                ),
+              ] else ...[
                   // Weight workout UI
                   // Weight input
                   Expanded(
@@ -1607,10 +1620,9 @@ class _WorkoutListScreenState extends ConsumerState<WorkoutListScreen>
             ],
           ],
         ),
-      ),
-    );
+      );
+    }
   }
-}
 
 // Bottom sheet widget for selecting/creating alternatives
 class _AlternativesBottomSheet extends StatefulWidget {

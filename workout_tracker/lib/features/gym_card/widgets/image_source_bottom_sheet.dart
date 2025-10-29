@@ -20,6 +20,7 @@ class ImageSourceBottomSheet extends StatelessWidget {
 
   Future<File?> _pickImage(BuildContext context, ImageSource source) async {
     try {
+      print('DEBUG: ImageSourceBottomSheet - Starting image picker with source: $source');
       final picker = ImagePicker();
       final XFile? pickedFile = await picker.pickImage(
         source: source,
@@ -28,10 +29,16 @@ class ImageSourceBottomSheet extends StatelessWidget {
         imageQuality: 85, // Compress to 85% quality
       );
 
-      if (pickedFile == null) return null;
+      if (pickedFile == null) {
+        print('DEBUG: ImageSourceBottomSheet - User cancelled image selection');
+        return null;
+      }
 
+      print('DEBUG: ImageSourceBottomSheet - Image selected: ${pickedFile.path}');
       return File(pickedFile.path);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('DEBUG: ImageSourceBottomSheet - Error picking image: $e');
+      print('DEBUG: ImageSourceBottomSheet - Stack trace: $stackTrace');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

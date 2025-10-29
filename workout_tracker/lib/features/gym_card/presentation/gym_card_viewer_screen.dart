@@ -55,16 +55,24 @@ class _GymCardViewerScreenState extends ConsumerState<GymCardViewerScreen> {
   }
 
   Future<void> _uploadImage() async {
+    print('DEBUG: GymCardViewer - Starting upload process');
     // Show image source picker
     final imageFile = await ImageSourceBottomSheet.show(context);
-    if (imageFile == null) return;
+    print('DEBUG: GymCardViewer - Image file returned: ${imageFile?.path ?? 'null'}');
+
+    if (imageFile == null) {
+      print('DEBUG: GymCardViewer - No image selected, returning');
+      return;
+    }
 
     setState(() => _isLoading = true);
 
     try {
+      print('DEBUG: GymCardViewer - Calling provider uploadImage');
       // Upload the image using the provider
       await ref.read(gymCardProvider.notifier).uploadImage(imageFile);
 
+      print('DEBUG: GymCardViewer - Upload successful');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -73,7 +81,9 @@ class _GymCardViewerScreenState extends ConsumerState<GymCardViewerScreen> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('DEBUG: GymCardViewer - Upload error: $e');
+      print('DEBUG: GymCardViewer - Stack trace: $stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
